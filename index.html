@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>金雀庫存管理系統</title>
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/production.css" />
 </head>
 <body>
 
@@ -45,6 +46,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="overview">📦 庫存總覽</button>
       <button class="tab" data-tab="incoming">🚚 在途商品</button>
+      <button class="tab" data-tab="production">📈 生產分析</button>
       <button class="tab" data-tab="history">📜 最近庫存異動</button>
       <button class="tab" data-tab="admin">⚙️ 管理後台</button>
     </nav>
@@ -69,6 +71,90 @@
 
       <p class="view-hint">大量品項清單模式，一列一個品項。點「庫存」欄位可排序。</p>
       <div id="inventoryGrid"></div>
+    </section>
+
+
+    <!-- 生產分析 -->
+    <section id="production" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>每日生產分析</h2>
+        <span class="badge info">V1 安全版：只分析，不扣庫存</span>
+      </div>
+
+      <div class="production-layout">
+        <div class="card production-card">
+          <h3>建立分析</h3>
+          <div class="form-grid production-form-grid">
+            <div class="field">
+              <label>分析日期</label>
+              <input id="productionDateInput" type="date" />
+            </div>
+            <div class="field">
+              <label>選擇資料夾 / 檔案</label>
+              <input id="productionFileInput" type="file" multiple webkitdirectory directory />
+              <p class="note">可先選日期資料夾或製程日期資料夾。網頁版只讀檔名，不讀檔案內容。</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>或貼上檔名清單測試</label>
+            <textarea id="productionFilenameInput" rows="9" placeholder="每行一筆，例如：
+(P)名牌(黑)(x20)_客人.ai
+(樣品)軍牌(單)(金,銀,玫瑰,黑)(各x20)_白_EM.pdf
+黃銅吊飾(長)(雙)(x1)_王小明_正.ai
+黃銅吊飾(長)(雙)(x1)_王小明_背.ai"></textarea>
+          </div>
+
+          <div class="production-actions">
+            <button id="productionAnalyzeBtn" type="button">開始分析</button>
+            <button id="productionDemoBtn" class="secondary" type="button">載入範例</button>
+            <button id="productionClearBtn" class="secondary" type="button">清空</button>
+            <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
+          </div>
+          <p class="note">此版本只在瀏覽器內分析，不會寫入庫存、不會修改 Firebase 資料。</p>
+        </div>
+
+        <div class="card production-card">
+          <h3>解析測試器</h3>
+          <div class="field">
+            <label>單筆檔名測試</label>
+            <input id="productionSingleTestInput" placeholder="例如：軍牌(單)(金,銀)(各x20).ai" />
+          </div>
+          <button id="productionSingleTestBtn" class="secondary" type="button">測試解析</button>
+          <pre id="productionSingleTestResult" class="production-pre">尚未測試</pre>
+        </div>
+      </div>
+
+      <div id="productionSummaryCards" class="production-summary-grid"></div>
+
+      <div class="production-result-grid">
+        <div class="card">
+          <h3>商品使用量</h3>
+          <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
+        </div>
+        <div class="card">
+          <h3>平台統計</h3>
+          <div id="productionSourceResult" class="production-table-wrap">尚未分析</div>
+        </div>
+        <div class="card">
+          <h3>標籤統計</h3>
+          <div id="productionTagResult" class="production-table-wrap">尚未分析</div>
+        </div>
+        <div class="card">
+          <h3>製程統計</h3>
+          <div id="productionProcessResult" class="production-table-wrap">尚未分析</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>明細</h3>
+        <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
+      </div>
+
+      <div class="card">
+        <h3>異常 / 需確認</h3>
+        <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
+      </div>
     </section>
 
     <!-- 在途商品 -->
@@ -479,5 +565,6 @@
   <script src="js/firebase-auth.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/production.js"></script>
 </body>
 </html>
