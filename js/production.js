@@ -19,6 +19,8 @@
   };
   const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
   const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "金", "銀", "黑", "白", "紅", "藍", "綠"];
+  const IGNORE_PRODUCT_WORDS = ["刻白", "刻黑", "雕白", "雕黑", "雷雕", "彩印", "白墨", "底白"];
+  const DESIGNER_CODE_RE = /^\d+[A-Z]{2,4}$/i;
 
   let lastAnalysis = null;
 
@@ -71,7 +73,7 @@
   }
 
   function classifyTokens(tokens) {
-    let source = "未標示";
+    let source = "蝦皮";
     const tags = [];
     const unknownStartTokens = [];
 
@@ -255,10 +257,14 @@
   }
 
   function cleanProduct(product) {
-    return String(product || "")
+    let value = String(product || "")
       .replace(/[，,、]+$/g, "")
       .replace(/\s+/g, "")
       .trim();
+    IGNORE_PRODUCT_WORDS.forEach(word => {
+      value = value.replace(new RegExp(escapeRegExp(word), "g"), "");
+    });
+    return value.trim();
   }
 
   function normalizedBaseName(baseName) {
@@ -315,6 +321,19 @@
       }
     }
     return null;
+  }
+
+
+  function inferDateFromPath(pathParts) {
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    return (pathParts || []).find(part => datePattern.test(part)) || "";
+  }
+
+  function isDateInRange(date, start, end) {
+    if (!date) return true;
+    if (start && date < start) return false;
+    if (end && date > end) return false;
+    return true;
   }
 
   function inferProcess(pathParts, dateValue) {
@@ -384,7 +403,9 @@
     const pathParts = splitPath(entry.path || entry.filename);
     const filename = entry.filename || pathParts[pathParts.length - 1] || "";
     const base = stripExtension(filename);
-    const process = entry.process || inferProcess(pathParts, dateValue);
+    const inferredDate = inferDateFromPath(pathParts);
+    const actualDate = inferredDate || dateValue || "";
+    const process = entry.process || inferProcess(pathParts, actualDate);
     const folderCandidate = pathParts.length > 1 ? folderParseCandidate(pathParts) : null;
     const parsed = folderCandidate ? folderCandidate.parsed : parseFullName(filename);
     const detectedAttribute = detectProductionAttribute(base);
@@ -396,7 +417,7 @@
     if (!Number.isFinite(parsed.quantity) || parsed.quantity <= 0) issues.push("數量無法判斷");
 
     return {
-      date: dateValue || "",
+      date: actualDate,
       process,
       source: parsed.source,
       tags: parsed.tags,
@@ -516,7 +537,6 @@
         add(source, record.source || "未標示", qty);
         add(process, record.process || "未指定", qty);
         if (record.tags.length) record.tags.forEach(t => add(tag, t, qty));
-        else add(tag, "無標籤", qty);
       }
       if (record.issues.length) issues.push(record);
     });
@@ -535,6 +555,17 @@
       processRows: mapRows(process),
       issues
     };
+  }
+
+  function filterEntriesByMode(entries, mode, dateValue, startDate, endDate) {
+    if (mode === "all") return entries;
+    return entries.filter(entry => {
+      const pathParts = splitPath(entry.path || entry.filename);
+      const inferred = inferDateFromPath(pathParts);
+      if (!inferred) return true;
+      if (mode === "range") return isDateInRange(inferred, startDate, endDate);
+      return inferred === dateValue;
+    });
   }
 
   function analyze(entries, dateValue) {
@@ -569,6 +600,15 @@
       return;
     }
     el.innerHTML = `<table class="production-table"><thead><tr>${columns.map(c => `<th class="${c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(c => `<td class="${c.num ? "num" : ""}">${escapeHtml(c.render ? c.render(row) : row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  }
+
+  function reviewSuggestion(record) {
+    const issueText = (record.issues || []).join("；");
+    if (/舊式尾端數量/.test(issueText)) return "建議改成 商品(x數量) 後重新分析";
+    if (/數量格式/.test(issueText)) return "請修正 (x數量)，例如 (x20)";
+    if (/缺少商品|無法判斷商品/.test(issueText)) return "請補上商品名稱";
+    if (/未知開頭標記/.test(issueText)) return "若是新來源或新標籤，後續可加入設定";
+    return "確認是否需要新增規則；目前安全版不會自動修改檔名";
   }
 
   function renderAnalysis(analysis) {
@@ -608,6 +648,7 @@
       { label: "狀態", render: () => "需確認" },
       { label: "商品", key: "product" },
       { label: "原因", render: r => r.issues.join("；") },
+      { label: "建議處理", render: reviewSuggestion },
       { label: "檔名", key: "filename" }
     ], "目前沒有異常檔名");
 
@@ -630,14 +671,26 @@
   }
 
   function runAnalysis() {
-    const dateValue = $("productionDateInput").value || todayString();
-    const entries = [...entriesFromTextarea(), ...entriesFromFileInput()];
-    if (!entries.length) {
-      alert("請先貼上檔名，或選擇資料夾 / 檔案。");
+    const mode = $("productionModeInput")?.value || "single";
+    const dateValue = $("productionDateInput")?.value || todayString();
+    const startDate = $("productionStartDateInput")?.value || dateValue;
+    const endDate = $("productionEndDateInput")?.value || startDate;
+    const rawEntries = [...entriesFromTextarea(), ...entriesFromFileInput()];
+    const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
+    if (!rawEntries.length) {
+      alert("請先貼上檔名，或選擇資料夾。");
       return;
     }
-    lastAnalysis = analyze(entries, dateValue);
+    if (!entries.length) {
+      alert("所選資料夾中沒有符合日期條件的檔名。若你選的是日期資料夾，請確認分析日期相同；若要分析一週，請選製程資料夾那一層。");
+      return;
+    }
+    lastAnalysis = analyze(entries, mode === "range" ? `${startDate}~${endDate}` : dateValue);
+    lastAnalysis.mode = mode;
+    lastAnalysis.filteredCount = entries.length;
+    lastAnalysis.rawCount = rawEntries.length;
     renderAnalysis(lastAnalysis);
+    $("productionSummaryCards")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function csvEscape(value) {
@@ -705,6 +758,18 @@
     if (!$("production")) return;
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
+    const startInput = $("productionStartDateInput");
+    const endInput = $("productionEndDateInput");
+    if (startInput && !startInput.value) startInput.value = todayString();
+    if (endInput && !endInput.value) endInput.value = todayString();
+    const modeInput = $("productionModeInput");
+    const syncMode = () => {
+      const mode = modeInput?.value || "single";
+      document.querySelectorAll(".production-date-single").forEach(el => el.classList.toggle("hidden", mode !== "single"));
+      document.querySelectorAll(".production-date-range").forEach(el => el.classList.toggle("hidden", mode !== "range"));
+    };
+    modeInput?.addEventListener("change", syncMode);
+    syncMode();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
