@@ -123,3 +123,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.production-main-card {
+  max-width: 980px;
+}
+
+.production-folder-field {
+  grid-column: 1 / -1;
+}
+
+.production-folder-field input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed rgba(62, 96, 102, 0.35);
+  border-radius: 12px;
+  background: #f8fbfa;
+}
