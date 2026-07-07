@@ -11,7 +11,7 @@
     B2B: "企業訂單"
   };
 
-  const TAG_SET = new Set(["急件", "特急", "補", "補件", "樣品"]);
+  const TAG_SET = new Set(["急件", "特急", "更特急", "快過期", "先刻", "先印", "補", "補件", "樣品"]);
   const SIDE_WORDS = ["正", "背", "正面", "背面"];
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
     side: ["正", "背", "正面", "背面"],
@@ -457,11 +457,12 @@
 
   function entriesFromFileInput() {
     const input = $("productionFileInput");
+    const manualProcess = ($("productionProcessInput")?.value || "").trim();
     if (!input || !input.files) return [];
     return Array.from(input.files).map(file => {
       const path = file.webkitRelativePath || file.name;
       const parts = splitPath(path);
-      return { path, filename: parts[parts.length - 1] || file.name };
+      return { path, filename: parts[parts.length - 1] || file.name, process: manualProcess || "" };
     });
   }
 
@@ -590,7 +591,7 @@
       ["計算數量", totalQty],
       ["商品種類", products],
       ["合併檔案", merged],
-      ["需確認", issues]
+      ["需要處理", issues]
     ].map(([label, value]) => `<div class="production-summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
   }
 
@@ -650,7 +651,7 @@
       { label: "原因", render: r => r.issues.join("；") },
       { label: "建議處理", render: reviewSuggestion },
       { label: "檔名", key: "filename" }
-    ], "目前沒有異常檔名");
+    ], "目前沒有需要處理的項目");
 
     $("productionExportCsvBtn").disabled = false;
   }
@@ -675,10 +676,10 @@
     const dateValue = $("productionDateInput")?.value || todayString();
     const startDate = $("productionStartDateInput")?.value || dateValue;
     const endDate = $("productionEndDateInput")?.value || startDate;
-    const rawEntries = [...entriesFromTextarea(), ...entriesFromFileInput()];
+    const rawEntries = [...entriesFromFileInput(), ...entriesFromTextarea()];
     const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
     if (!rawEntries.length) {
-      alert("請先貼上檔名，或選擇資料夾。");
+      alert("請先選擇要分析的資料夾。");
       return;
     }
     if (!entries.length) {
@@ -773,9 +774,12 @@
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
-      $("productionFilenameInput").value = "";
+      const textarea = $("productionFilenameInput");
+      if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
+      const processInput = $("productionProcessInput");
+      if (processInput) processInput.value = "";
       lastAnalysis = null;
       $("productionSummaryCards").innerHTML = "";
       ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueResult"].forEach(id => {
