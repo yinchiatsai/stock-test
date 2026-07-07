@@ -144,6 +144,7 @@
           unitHint: "件",
           colors,
           perColorQty: perColor,
+          variantDetails: colors.map(color => ({ name: color, quantity: perColor })),
           qtyMode: "same-color-qty",
           issues
         };
@@ -154,6 +155,7 @@
     if (last && /[,，、]/.test(last.text) && /[xX×]\s*\d+/.test(last.text)) {
       const parts = parseColorList(last.text);
       const colors = [];
+      const variantDetails = [];
       let total = 0;
       let ok = true;
       parts.forEach(part => {
@@ -163,8 +165,11 @@
           issues.push(`顏色數量格式無法解析：${part}`);
           return;
         }
-        colors.push(m[1].trim());
-        total += Number(m[2]);
+        const color = m[1].trim();
+        const qty = Number(m[2]);
+        colors.push(color);
+        variantDetails.push({ name: color, quantity: qty });
+        total += qty;
       });
       if (ok) {
         return {
@@ -172,6 +177,7 @@
           quantity: total,
           unitHint: "件",
           colors,
+          variantDetails,
           qtyMode: "multi-color-different-qty",
           issues
         };
@@ -223,6 +229,7 @@
         quantity: colorHits.length,
         unitHint: "件",
         colors: colorHits,
+        variantDetails: colorHits.map(color => ({ name: color, quantity: 1 })),
         qtyMode: "legacy-color-count",
         issues: ["使用舊式多色寫法，建議改為：商品(顏色1,顏色2)(各x數量)"]
       };
@@ -305,9 +312,43 @@
       unitHint: parsed.unitHint,
       colors: parsed.colors || [],
       perColorQty: parsed.perColorQty || "",
+      variantDetails: parsed.variantDetails || [],
       qtyMode: parsed.qtyMode,
       issues: [...(parsed.issues || []), ...classified.unknownStartTokens.map(t => `未知開頭標記：(${t})`)]
     };
+  }
+
+
+
+  function buildStockDetails(parsed) {
+    const product = parsed.product || "未解析";
+    const qty = Number(parsed.quantity || 0);
+    const variants = parsed.variantDetails || [];
+
+    if (variants.length) {
+      return variants.map(v => ({
+        item: `${product}(${v.name})`,
+        variant: v.name,
+        quantity: Number(v.quantity || 0),
+        unit: parsed.unitHint || "件",
+        note: "多色拆扣"
+      }));
+    }
+
+    return [{
+      item: product,
+      variant: (parsed.colors && parsed.colors.length === 1) ? parsed.colors[0] : "",
+      quantity: qty,
+      unit: parsed.unitHint || "件",
+      note: "一般扣庫存"
+    }];
+  }
+
+  function stockDetailsText(details) {
+    return (details || [])
+      .filter(d => Number(d.quantity || 0) > 0)
+      .map(d => `${d.item} × ${d.quantity}${d.unit || ""}`)
+      .join("；") || "-";
   }
 
   function parseEntry(entry, dateValue) {
@@ -334,6 +375,7 @@
       unit: parsed.unitHint || "件",
       colors: parsed.colors,
       perColorQty: parsed.perColorQty,
+      stockDetails: buildStockDetails(parsed),
       qtyMode: parsed.qtyMode,
       side,
       identity,
@@ -382,6 +424,7 @@
         record.fileCountInFolder = group.length;
         if (index > 0) {
           record.countedQuantity = 0;
+          record.stockDetails = [];
           record.mergedByFolder = true;
         }
       });
@@ -403,6 +446,7 @@
         group.forEach((record, index) => {
           if (index > 0) {
             record.countedQuantity = 0;
+            record.stockDetails = [];
             record.mergedBySide = true;
           }
         });
@@ -504,6 +548,7 @@
     renderSimpleTable($("productionDetailResult"), analysis.records, [
       { label: "計算", render: r => r.countedQuantity },
       { label: "商品", key: "product" },
+      { label: "庫存扣料預覽", render: r => stockDetailsText(r.stockDetails) },
       { label: "來源", key: "source" },
       { label: "標籤", render: r => r.tags.join("、") || "無" },
       { label: "製程", key: "process" },
@@ -554,13 +599,14 @@
 
   function exportCsv() {
     if (!lastAnalysis) return;
-    const rows = [["日期", "製程", "來源", "標籤", "商品", "計算數量", "原始數量", "單位", "顏色", "合併狀態", "檔名", "路徑", "異常"]];
+    const rows = [["日期", "製程", "來源", "標籤", "商品", "庫存扣料預覽", "計算數量", "原始數量", "單位", "顏色", "合併狀態", "檔名", "路徑", "異常"]];
     lastAnalysis.records.forEach(r => rows.push([
       lastAnalysis.date,
       r.process,
       r.source,
       r.tags.join("、") || "無",
       r.product,
+      stockDetailsText(r.stockDetails),
       r.countedQuantity,
       r.quantity,
       r.unit,
@@ -591,11 +637,12 @@
     const result = parseEntry({ filename: value, path: value }, $("productionDateInput").value || todayString());
     $("productionSingleTestResult").textContent = JSON.stringify({
       商品: result.product,
-      數量: result.quantity,
+      總數量: result.quantity,
       計算數量: result.countedQuantity,
+      庫存扣料預覽: result.stockDetails,
       來源: result.source,
       標籤: result.tags,
-      顏色: result.colors,
+      規格或顏色: result.colors,
       模式: result.qtyMode,
       製作面: result.side || "無",
       異常: result.issues
