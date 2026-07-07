@@ -86,13 +86,29 @@
           <h3>建立分析</h3>
           <div class="form-grid production-form-grid">
             <div class="field">
+              <label>分析模式</label>
+              <select id="productionModeInput">
+                <option value="single">單日分析</option>
+                <option value="range">日期區間 / 一週分析</option>
+                <option value="all">分析所選資料夾全部日期</option>
+              </select>
+            </div>
+            <div class="field production-date-single">
               <label>分析日期</label>
               <input id="productionDateInput" type="date" />
             </div>
+            <div class="field production-date-range hidden">
+              <label>開始日期</label>
+              <input id="productionStartDateInput" type="date" />
+            </div>
+            <div class="field production-date-range hidden">
+              <label>結束日期</label>
+              <input id="productionEndDateInput" type="date" />
+            </div>
             <div class="field">
-              <label>選擇資料夾 / 檔案</label>
+              <label>請選擇資料夾</label>
               <input id="productionFileInput" type="file" multiple webkitdirectory directory />
-              <p class="note">可先選日期資料夾或製程日期資料夾。網頁版只讀檔名，不讀檔案內容。</p>
+              <p class="note">單日可選「金屬製作檔 &gt; 2026-07-07」日期資料夾；若要一次分析一週，建議選「金屬製作檔」這層，系統會讀取裡面的日期資料夾。網頁版只讀檔名，不讀檔案內容。</p>
             </div>
           </div>
 
