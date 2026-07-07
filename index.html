@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>金雀庫存管理系統</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div id="authPanel" class="auth-panel">
+    <div class="auth-card">
+      <h2>金雀庫存管理系統</h2>
+      <p id="authMessage">請使用公司授權的 Google 帳號登入。</p>
+      <button id="googleLoginBtn" type="button">使用 Google 登入</button>
+    </div>
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div class="brand-block">
+        <h1>金雀庫存管理系統</h1>
+        <p>庫存查詢・在途管理・成本報表・商品對應</p>
+      </div>
+
+      <button id="mobileAccountToggleBtn" class="secondary small mobile-account-toggle" type="button">帳號 / 同步 ▾</button>
+      <div class="role-box" id="roleBox">
+        <span>目前身份</span>
+        <select id="roleSelect">
+          <option value="staff">全員 / 美編</option>
+          <option value="emily">Emily</option>
+          <option value="process">製程人員</option>
+          <option value="boss">老闆</option>
+          <option value="qing">青</option>
+        </select>
+        <button id="clearRoleBtn" class="secondary small" type="button">清除管理身份</button>
+        <span id="userInfoText" class="user-info-text">未登入</span>
+        <span id="syncStatusText" class="sync-status-text">尚未同步</span>
+        <button id="logoutBtn" class="secondary small" type="button">登出</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">📦 庫存總覽</button>
+      <button class="tab" data-tab="incoming">🚚 在途商品</button>
+      <button class="tab" data-tab="history">📜 最近庫存異動</button>
+      <button class="tab" data-tab="admin">⚙️ 管理後台</button>
+    </nav>
+
+    <!-- 庫存總覽 -->
+    <section id="overview" class="tab-panel">
+      <div class="toolbar">
+        <div class="left">
+          <input id="searchInput" placeholder="搜尋品項，例如：墨水、木盒、壓克力" />
+          <select id="categoryFilter">
+            <option value="all">全部分類</option>
+            <option value="金屬">金屬</option>
+            <option value="木頭">木頭</option>
+            <option value="彩印">彩印</option>
+            <option value="包材">包材</option>
+          </select>
+        </div>
+        <div class="right">
+          <button class="secondary small" id="restockToggleBtn">只看需補貨</button>
+        </div>
+      </div>
+
+      <p class="view-hint">大量品項清單模式，一列一個品項。點「庫存」欄位可排序。</p>
+      <div id="inventoryGrid"></div>
+    </section>
+
+    <!-- 在途商品 -->
+    <section id="incoming" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>在途商品 / 到貨登記</h2>
+        <span class="badge info">查看叫貨並直接確認到貨</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>叫貨日期</th>
+            <th>品項</th>
+            <th>叫貨數量</th>
+            <th>已到貨</th>
+            <th>剩餘在途</th>
+<th>叫貨人</th>
+            <th>狀態</th>
+            <th>本次到貨</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="incomingTable"></tbody>
+      </table>
+    </section>
+
+    <!-- 管理後台 -->
+    
+
+
+    <section id="history" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>最近庫存異動</h2>
+        <span class="badge info">追蹤盤點、到貨與新增紀錄</span>
+      </div>
+
+      <div class="card">
+        <div class="form-grid">
+          <div class="field">
+            <label>搜尋異動紀錄</label>
+            <input id="historySearchInput" placeholder="搜尋品項、原因、人員" />
+          </div>
+          <div class="field">
+            <label>顯示筆數</label>
+            <select id="historyLimitSelect">
+              <option value="20">最近 20 筆</option>
+              <option value="50">最近 50 筆</option>
+              <option value="100">最近 100 筆</option>
+              <option value="all">全部</option>
+            </select>
+          </div>
+          <div class="field filter-action-field">
+            <button id="clearHistoryBtn" class="danger" type="button">清除異動紀錄</button>
+          </div>
+        </div>
+        <p class="note">清除異動紀錄不會影響目前庫存、品項或在途資料。此動作無法復原。</p>
+      </div>
+
+      <div class="card">
+        <div id="historyPageList" class="stock-history-list">尚無庫存異動紀錄</div>
+      </div>
+    </section>
+
+<section id="admin" class="tab-panel hidden">
+      <div id="adminLocked" class="card locked">
+        <h3>🔐 管理後台</h3>
+        <p>這區僅限授權管理身份進入。</p>
+      </div>
+
+      <div id="adminContent" class="hidden">
+        <div class="admin-section order-section">
+          <div class="section-title admin-section-title">
+            <h2>叫貨管理</h2>
+          </div>
+          <div class="order-input-grid">
+
+        <div class="card">
+          <h3>手動新增叫貨</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>搜尋品項</label>
+              <input id="manualOrderItemSearch" placeholder="輸入內部品項關鍵字" autocomplete="off" />
+              <div id="manualOrderAutocompleteList"></div>
+              <input type="hidden" id="manualOrderItemSelect" />
+            </div>
+            <div class="field">
+              <label>叫貨數量</label>
+              <input id="manualOrderQty" type="number" min="1" placeholder="例如：100" />
+            </div>
+            <div class="field">
+              <label>商品成本</label>
+              <input id="manualOrderCost" type="number" min="0" placeholder="例如：1280" />
+            </div>
+            <div class="field">
+              <label>運費</label>
+              <input id="manualOrderFreight" type="number" min="0" placeholder="例如：80" />
+            </div>
+            <div class="field">
+              <label>幣別</label>
+              <select id="manualOrderCurrency">
+                <option value="TWD">台幣 TWD</option>
+                <option value="CNY">人民幣 CNY</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>匯率 / 換算</label>
+              <input id="manualOrderFxPreview" readonly placeholder="台幣免換算" />
+            </div>
+            <div class="field">
+              <label>來源</label>
+              <input id="manualOrderSource" placeholder="例如：1688、蝦皮、LINE叫貨" />
+            </div>
+            <div class="field">
+              <label>叫貨日期</label>
+              <input id="manualOrderDate" type="date" />
+            </div>
+            <div class="field manual-order-action">
+              <button id="addManualOrderBtn" type="button">新增叫貨紀錄</button>
+            </div>
+          </div>
+          <p class="note">手動新增後會直接進入「在途商品」，並計入成本報表。</p>
+        </div>
+          </div>
+
+        <div class="section-title">
+          <h2>叫貨紀錄（含成本）</h2>
+          <span class="badge bad">成本 / 來源不給全員頁顯示</span>
+        </div>
+
+        <div class="table-scroll">
+        <div class="card compact-filter-card">
+          <div class="form-grid">
+            <div class="field">
+              <label>叫貨月份</label>
+              <select id="orderMonthFilter">
+                <option value="all">全部月份</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>叫貨人</label>
+              <select id="orderPersonFilter">
+                <option value="all">全部叫貨人</option>
+                <option value="老闆">老闆</option>
+                <option value="青">青</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>搜尋叫貨紀錄</label>
+              <input id="orderSearchInput" placeholder="搜尋品項、來源" />
+            </div>
+            <div class="field filter-action-field">
+              <button id="applyOrderFilterBtn" type="button">搜尋</button>
+            </div>
+            <div class="field filter-action-field">
+              <button id="resetOrderFilterBtn" class="secondary" type="button">清除篩選</button>
+            </div>
+          </div>
+        </div>
+        <p id="orderFilterStatus" class="filter-status">目前顯示全部叫貨紀錄</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>品項</th>
+              <th>數量</th>
+              <th>已到貨</th>
+<th>來源</th>
+              <th>叫貨人</th>
+              <th>狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="adminOrdersTable"></tbody>
+        </table>
+        </div>
+        </div>
+
+        <div class="admin-section cost-section">
+        <div class="section-title">
+          <h2>成本報表</h2>
+          <span class="badge info">月份保留，方便對帳</span>
+        </div>
+
+        <div class="card">
+          <div class="form-grid">
+            <div class="field">
+              <label>年度</label>
+              <select id="costYearSelect"></select>
+            </div>
+            <div class="field">
+              <label>年度總進貨成本</label>
+              <input id="yearTotalCost" readonly />
+            </div>
+          </div>
+        </div>
+
+        <table id="monthlyCostTableWrap">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>總進貨成本</th>
+              <th>在途成本</th>
+              <th>包材成本</th>
+            </tr>
+          </thead>
+          <tbody id="monthlyCostTable"></tbody>
+        </table>
+        <div id="monthlyCostCards" class="mobile-cost-cards"></div>
+        </div>
+
+        <div class="admin-section item-section">
+        <div class="section-title">
+          <h2>品項管理</h2>
+          <span class="badge warn">停賣建議停用，不直接刪除</span>
+        </div>
+
+        <div class="card">
+          <h3>新增品項</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>品項名稱</label>
+              <input id="newItemNameManage" placeholder="例如：黃銅門牌" />
+            </div>
+            <div class="field">
+              <label>分類</label>
+              <select id="newItemCategoryManage">
+                <option>金屬</option>
+                <option>木頭</option>
+                <option>彩印</option>
+                <option>包材</option>
+                <option>熱轉印 / 熱昇華</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>新增分類（選填）</label>
+              <input id="newCategoryInput" placeholder="例如：雷雕、印刷" />
+            </div>
+            <div class="field">
+              <label>安全庫存</label>
+              <input id="newItemSafetyManage" type="number" placeholder="例如：10" />
+            </div>
+            <div class="field">
+              <label>初始庫存</label>
+              <input id="newItemStockManage" type="number" min="0" placeholder="例如：100" />
+            </div>
+            <div class="field">
+              <label>管理部門</label>
+              <input id="newItemDeptManage" placeholder="例如：金屬 / 彩印" />
+            </div>
+            <div class="field check-field">
+              <input id="newItemSharedManage" type="checkbox" />
+              <label for="newItemSharedManage">共用庫存</label>
+            </div>
+            <div class="field full">
+              <label>備註</label>
+              <input id="newItemNoteManage" placeholder="例如：門牌類常用品項" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button id="addItemManageBtn">新增品項</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="form-grid">
+            <div class="field">
+              <label>搜尋品項管理</label>
+              <input id="itemManageSearch" placeholder="輸入品項名稱，例如：墨水" />
+            </div>
+            <div class="field">
+              <label>分類篩選</label>
+              <select id="itemManageCategoryFilter">
+                <option value="all">全部分類</option>
+              </select>
+            </div>
+            <div class="field filter-action-field">
+              <button id="resetItemManageFilterBtn" class="secondary" type="button">清除篩選</button>
+            </div>
+          </div>
+          <p class="note">不想再列入庫存的品項，建議先按「停用」。建錯才按「刪除」。</p>
+        </div>
+
+        <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>品項</th>
+              <th>分類</th>
+              <th>安全庫存</th>
+              <th>狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="itemManageTable"></tbody>
+        </table>
+        </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+
+  <div id="quickStockModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>快速盤點</h3>
+      <input type="hidden" id="quickStockItemId" />
+      <p id="quickStockItemText">請確認品項</p>
+      <div class="field"><label>目前庫存</label><input id="quickStockOldQty" readonly /></div>
+      <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
+      <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
+      <div class="field">
+        <label>異動原因</label>
+        <select id="quickStockReason">
+          <option value="盤點更新">盤點更新</option>
+          <option value="報廢調整">報廢調整</option>
+          <option value="借出調整">借出調整</option>
+          <option value="歸還調整">歸還調整</option>
+          <option value="其他調整">其他調整</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>自訂原因（選填）</label>
+        <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
+      </div>
+      <div class="modal-actions">
+        <button class="secondary" id="cancelQuickStockBtn" type="button">取消</button>
+        <button id="confirmQuickStockBtn" type="button">確認更新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 密碼 Modal -->
+  <div id="passwordModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>管理身份驗證</h3>
+      <p id="passwordModalText">請完成管理身份驗證。</p>
+      <input id="passwordInput" type="password" placeholder="請輸入管理密碼" />
+      <div class="modal-actions">
+        <button class="secondary" id="cancelPasswordBtn">取消</button>
+        <button id="confirmPasswordBtn">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改叫貨紀錄 Modal -->
+  <div id="editOrderModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>修改叫貨紀錄</h3>
+      <input type="hidden" id="editOrderId" />
+      <div class="field"><label>品項</label><select id="editOrderItem"></select></div>
+      <div class="field"><label>叫貨數量</label><input id="editOrderQty" type="number" min="0" /></div>
+      <div class="field"><label>已到貨數量</label><input id="editOrderReceived" type="number" min="0" /></div>
+      <div class="field"><label>成本</label><input id="editOrderCost" type="number" min="0" /></div>
+      <div class="field"><label>來源</label><input id="editOrderSource" /></div>
+      <div class="modal-actions">
+        <button class="secondary" id="closeEditOrderBtn">取消</button>
+        <button id="saveEditOrderBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改品項 Modal -->
+  <div id="editItemModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>修改品項資料</h3>
+      <input type="hidden" id="editItemId" />
+      <div class="field"><label>品項名稱</label><input id="editItemNameInput" /></div>
+      <div class="field">
+        <label>分類</label>
+        <select id="editItemCategoryInput">
+          <option>金屬</option>
+          <option>木頭</option>
+          <option>彩印</option>
+          <option>包材</option>
+<option>熱轉印 / 熱昇華</option>
+        </select>
+      </div>
+      <div class="field"><label>管理部門</label><input id="editItemDeptInput" placeholder="例如：金屬 / 彩印" /></div>
+      <div class="field"><label>安全庫存</label><input id="editItemSafetyInput" type="number" min="0" /></div>
+      <div class="field check-field"><input id="editItemSharedInput" type="checkbox" /><label for="editItemSharedInput">共用庫存</label></div>
+      <div class="field"><label>備註</label><input id="editItemNoteInput" /></div>
+      <div class="modal-actions">
+        <button class="secondary" id="closeEditItemBtn">取消</button>
+        <button id="saveEditItemBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刪除品項 Modal -->
+  <div id="deleteItemModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>刪除品項</h3>
+      <p id="deleteItemText">確定要刪除此品項嗎？</p>
+      <input type="hidden" id="deleteItemId" />
+      <div class="modal-actions">
+        <button class="secondary" id="closeDeleteItemBtn">取消</button>
+        <button class="danger" id="confirmDeleteItemBtn">確認刪除</button>
+      </div>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-auth.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

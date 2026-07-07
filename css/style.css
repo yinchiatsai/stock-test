@@ -1,0 +1,959 @@
+:root{
+  --brand:#3e6066;
+  --brand-dark:#29454a;
+  --bg:#f6f4ef;
+  --card:#fff;
+  --text:#263238;
+  --muted:#7b8a8e;
+  --line:#dfe5e4;
+  --good:#dff3e4;
+  --good-text:#267245;
+  --warn:#fff1cf;
+  --warn-text:#9a6a00;
+  --bad:#ffe0dd;
+  --bad-text:#a4382f;
+  --blue:#e3eef4;
+  --blue-text:#315d75;
+  --shadow:0 10px 30px rgba(62,96,102,.12);
+  --radius:18px;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+header{
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:rgba(246,244,239,.94);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(62,96,102,.12);
+}
+
+.header-inner{
+  max-width:1180px;
+  margin:0 auto;
+  padding:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.brand-block h1{
+  margin:0;
+  font-size:20px;
+  color:var(--brand-dark);
+}
+
+.brand-block p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.role-box{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.role-box span{
+  font-size:13px;
+  color:var(--muted);
+  font-weight:700;
+}
+
+select,input,button,textarea{font:inherit}
+
+select,input,textarea{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:12px;
+  padding:10px 12px;
+  color:var(--text);
+  outline:none;
+}
+
+button{
+  border:0;
+  border-radius:12px;
+  padding:10px 14px;
+  background:var(--brand);
+  color:#fff;
+  cursor:pointer;
+  box-shadow:0 6px 16px rgba(62,96,102,.18);
+}
+
+button.secondary{
+  background:#fff;
+  color:var(--brand-dark);
+  border:1px solid var(--line);
+  box-shadow:none;
+}
+
+button.danger{background:#b94b43}
+button.small{padding:7px 10px;font-size:13px}
+button:active{transform:translateY(1px)}
+
+main{
+  max-width:1180px;
+  margin:0 auto;
+  padding:18px 16px 72px;
+}
+
+.tabs{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin:12px 0 18px;
+}
+
+.tab{
+  background:#fff;
+  color:var(--brand-dark);
+  border:1px solid var(--line);
+  box-shadow:none;
+}
+
+.tab.active{
+  background:var(--brand);
+  color:#fff;
+  border-color:var(--brand);
+}
+
+.toolbar{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+
+.toolbar .left,.toolbar .right{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.view-hint{
+  color:var(--muted);
+  font-size:13px;
+  margin:0 0 10px;
+}
+
+.inventory-list{
+  background:#fff;
+  border:1px solid rgba(62,96,102,.1);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+
+.inventory-row{
+  display:grid;
+  grid-template-columns:minmax(180px,1.6fr) 90px 90px 110px 140px 110px;
+  gap:12px;
+  align-items:center;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  font-size:14px;
+}
+
+.safety-cell{min-width:100px}
+
+.inventory-row .badge{
+  min-width:96px;
+  justify-content:center;
+}
+
+.inventory-row:last-child{border-bottom:0}
+
+.inventory-row.header{
+  background:#eef4f3;
+  color:var(--brand-dark);
+  font-weight:800;
+}
+
+.inventory-name strong{
+  display:block;
+  font-size:14px;
+}
+
+.num-cell{
+  font-weight:800;
+  font-size:15px;
+}
+
+.suggest-cell{
+  color:var(--muted);
+  font-size:13px;
+}
+
+.meta-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:4px;
+}
+
+.meta-tag{
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  padding:3px 7px;
+  font-size:11px;
+  font-weight:700;
+  background:#f2f5f4;
+  color:var(--muted);
+  line-height:1.2;
+}
+
+.meta-tag.category{background:#edf4f2;color:var(--brand-dark)}
+.meta-tag.dept{background:#f7f1df;color:#7a5d20}
+.meta-tag.mode{background:#eef1f5;color:#506075}
+.meta-tag.note-tag{background:#f9f6eb;color:#7b735e}
+
+.card{
+  background:var(--card);
+  border:1px solid rgba(62,96,102,.1);
+  border-radius:var(--radius);
+  padding:16px;
+  box-shadow:var(--shadow);
+  margin-bottom:14px;
+}
+
+.card h3{margin-top:0}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  padding:5px 9px;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.badge.good{background:var(--good);color:var(--good-text)}
+.badge.warn{background:var(--warn);color:var(--warn-text)}
+.badge.bad{background:var(--bad);color:var(--bad-text)}
+.badge.info{background:var(--blue);color:var(--blue-text)}
+
+.note{
+  margin-top:12px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.55;
+  background:#f9f6eb;
+  border-radius:14px;
+  padding:10px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:#fff;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+
+th,td{
+  padding:12px 10px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  font-size:14px;
+  vertical-align:middle;
+}
+
+th{
+  background:#eef4f3;
+  color:var(--brand-dark);
+  font-weight:800;
+  white-space:nowrap;
+}
+
+tr:last-child td{border-bottom:0}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:12px;
+}
+
+.field label{
+  display:block;
+  margin-bottom:6px;
+  font-size:13px;
+  color:var(--muted);
+  font-weight:700;
+}
+
+.field input,.field select,.field textarea{width:100%}
+
+.check-field{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding-top:24px;
+}
+
+.check-field input{
+  width:auto;
+}
+.field.full{grid-column:1/-1}
+
+.section-title{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin:22px 0 10px;
+}
+
+.section-title h2{
+  font-size:18px;
+  margin:0;
+  color:var(--brand-dark);
+}
+
+.locked{
+  background:repeating-linear-gradient(45deg,#fff,#fff 10px,#f7f2e7 10px,#f7f2e7 20px);
+}
+
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:22px;
+  transform:translateX(-50%);
+  background:var(--brand-dark);
+  color:#fff;
+  padding:12px 16px;
+  border-radius:999px;
+  box-shadow:var(--shadow);
+  display:none;
+  z-index:99;
+  font-size:14px;
+}
+
+.toast.show{display:block}
+.hidden{display:none!important}
+
+.modal-mask{
+  position:fixed;
+  inset:0;
+  background:rgba(38,50,56,.35);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:120;
+  padding:16px;
+}
+
+.modal-mask.show{display:flex}
+
+.modal-box{
+  width:min(420px,100%);
+  max-height:92vh;
+  overflow:auto;
+  background:#fff;
+  border-radius:20px;
+  padding:20px;
+  box-shadow:0 20px 50px rgba(38,50,56,.24);
+}
+
+.modal-box h3{
+  margin:0 0 8px;
+  color:var(--brand-dark);
+}
+
+.modal-box p{
+  margin:0 0 14px;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.5;
+}
+
+.modal-actions{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  margin-top:14px;
+}
+
+.auto-item{
+  background:#fff;
+  border:1px solid var(--line);
+  border-top:0;
+  padding:8px 10px;
+  cursor:pointer;
+}
+
+.auto-item:hover{background:#f6faf9}
+
+@media(max-width:900px){
+  .tabs{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .inventory-row{grid-template-columns:minmax(150px,1.5fr) 70px 70px 90px 120px}
+  .inventory-row .suggest-cell{display:none}
+}
+
+@media(max-width:640px){
+  .header-inner{align-items:flex-start;flex-direction:column}
+  .role-box{width:100%}
+  .role-box select{flex:1}
+  main{padding:12px 12px 80px}
+  .inventory-list{box-shadow:none;border-radius:14px}
+  .inventory-row{
+    grid-template-columns:1fr auto;
+    gap:6px 10px;
+    padding:10px;
+  }
+  .inventory-row.header{display:none}
+  .inventory-name{grid-column:1/2}
+  .inventory-row .num-cell,.inventory-row .suggest-cell{
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+  }
+  .inventory-row .badge{justify-self:end}
+  .inventory-row .stock-cell::before{content:'庫存 ';font-weight:500}
+  .inventory-row .incoming-cell::before{content:'在途 ';font-weight:500}
+  .inventory-row .safety-cell::before{content:'安全 ';font-weight:500}
+  .inventory-row .suggest-cell{display:block;grid-column:1/-1}
+  .inventory-row .suggest-cell::before{content:'建議補貨 ';font-weight:500}
+  table{display:block;overflow-x:auto;white-space:nowrap}
+  .tabs{
+    position:sticky;
+    top:78px;
+    z-index:15;
+    background:rgba(246,244,239,.95);
+    padding:8px 0;
+  }
+  .tab{padding:10px 8px}
+}
+
+
+.form-actions{
+  margin-top:14px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+
+/* v3 override：避免安全欄位與狀態標籤黏在一起 */
+.inventory-row{
+  grid-template-columns:minmax(180px,1.5fr) 90px 90px 130px 160px 110px;
+  gap:16px;
+}
+
+.safety-cell{
+  min-width:120px;
+}
+
+.safety-cell input{
+  width:96px !important;
+  max-width:100%;
+  text-align:center;
+}
+
+.inventory-row .badge{
+  min-width:110px;
+  justify-content:center;
+}
+
+@media(max-width:900px){
+  .inventory-row{
+    grid-template-columns:minmax(150px,1.4fr) 70px 70px 110px 130px;
+    gap:12px;
+  }
+}
+
+@media(max-width:640px){
+  .safety-cell input{
+    width:76px !important;
+    padding:7px 8px;
+  }
+  .inventory-row .badge{
+    min-width:88px;
+  }
+}
+
+
+/* ===== 手機優化：庫存卡片模式 ===== */
+@media(max-width:640px){
+  .inventory-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .inventory-row{
+    display:block;
+    background:#fff;
+    border-radius:12px;
+    padding:12px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.05);
+  }
+
+  .inventory-row.header{
+    display:none;
+  }
+
+  .inventory-name{
+    font-size:15px;
+    margin-bottom:6px;
+  }
+
+  .inventory-row .num-cell,
+  .inventory-row .safety-cell,
+  .inventory-row .suggest-cell{
+    display:block;
+    margin:4px 0;
+    font-size:13px;
+  }
+
+  .inventory-row .num-cell::before{content:"庫存：";}
+  .inventory-row .incoming-cell::before{content:"在途：";}
+  .inventory-row .safety-cell::before{content:"安全：";}
+  .inventory-row .suggest-cell::before{content:"建議補貨：";}
+
+  .inventory-row .badge{
+    display:inline-block;
+    margin-top:6px;
+  }
+}
+
+@media(max-width:640px){
+  button{
+    padding:12px 14px;
+    font-size:15px;
+  }
+
+  input, select{
+    padding:12px;
+    font-size:15px;
+  }
+}
+
+
+/* v7：手機版成本報表改成卡片，避免表格最右側空白或擠壓 */
+.mobile-cost-cards{
+  display:none;
+}
+
+@media(max-width:640px){
+  #monthlyCostTableWrap{
+    display:none !important;
+  }
+
+  .mobile-cost-cards{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-top:10px;
+  }
+
+  .cost-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:14px;
+    box-shadow:0 4px 12px rgba(0,0,0,.05);
+  }
+
+  .cost-card-title{
+    font-weight:800;
+    color:var(--brand-dark);
+    margin-bottom:10px;
+    font-size:16px;
+  }
+
+  .cost-card-row{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:7px 0;
+    border-top:1px solid #edf1f0;
+    font-size:14px;
+  }
+
+  .cost-card-row span:first-child{
+    color:var(--muted);
+    font-weight:700;
+  }
+
+  .cost-card-row span:last-child{
+    font-weight:800;
+    color:var(--text);
+  }
+
+  #clearRoleBtn{
+    width:100%;
+    margin-top:4px;
+  }
+}
+
+
+/* v8：快速更新庫存與新增對應按鈕間距 */
+.quick-stock-card{
+  margin-bottom:16px;
+}
+
+.quick-action-field{
+  display:flex;
+  align-items:flex-end;
+}
+
+.quick-action-field button{
+  width:100%;
+}
+
+.form-actions{
+  margin-top:14px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.inventory-row.updated-row{
+  background:#fff9df;
+  box-shadow:inset 4px 0 0 #d9a441;
+}
+
+@media(max-width:640px){
+  .quick-action-field{
+    padding-top:0;
+  }
+
+  .quick-action-field button{
+    width:100%;
+  }
+}
+
+
+/* v8.2：手動新增叫貨 */
+.manual-order-action{
+  display:flex;
+  align-items:flex-end;
+}
+
+.manual-order-action button{
+  width:100%;
+}
+
+@media(max-width:640px){
+  .manual-order-action{
+    padding-top:0;
+  }
+}
+
+
+/* v8.3：商品對應搜尋提示 */
+.auto-empty{
+  color:#a4382f;
+  background:#fff7f5;
+  cursor:default;
+}
+
+.form-actions{
+  margin-top:14px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+
+/* v8.4：管理後台分區視覺 */
+.admin-section{
+  margin:22px 0;
+  padding:18px;
+  border-radius:24px;
+  background:#fff;
+  border:1px solid rgba(62,96,102,.08);
+  box-shadow:0 8px 24px rgba(62,96,102,.08);
+}
+
+.admin-section-title{
+  margin-top:0;
+}
+
+.order-section{
+  background:#fbfcfb;
+}
+
+.order-input-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  align-items:start;
+}
+
+.order-input-grid .card{
+  margin-bottom:0;
+  box-shadow:none;
+  border:1px solid var(--line);
+}
+
+.cost-section{
+  background:#fff8df;
+  border-color:#f1dc9a;
+}
+
+.cost-section .card,
+.cost-section table,
+.cost-section .cost-card{
+  background:#fffdf3;
+}
+
+.cost-section .section-title h2::before{
+  content:"💰 ";
+}
+
+.item-section .section-title h2::before{
+  content:"📦 ";
+}
+
+.mapping-section .section-title h2::before{
+  content:"🔗 ";
+}
+
+.order-section > .section-title h2::before{
+  content:"🧾 ";
+}
+
+@media(max-width:900px){
+  .order-input-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:640px){
+  .admin-section{
+    padding:14px;
+    border-radius:18px;
+    margin:16px 0;
+  }
+
+  .order-input-grid{
+    gap:12px;
+  }
+}
+
+
+/* v8.5：長資料表改成內部捲動，避免整頁無限伸長 */
+.table-scroll{
+  max-height:420px;
+  overflow:auto;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  background:#fff;
+}
+
+.table-scroll table{
+  box-shadow:none;
+  border-radius:0;
+}
+
+.table-scroll thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+}
+
+tr.highlight-row,
+.inventory-row.highlight-row{
+  animation: highlightFade 2.4s ease-out;
+}
+
+@keyframes highlightFade{
+  0%{background:#fff1b8;}
+  45%{background:#fff6cf;}
+  100%{background:#fff;}
+}
+
+@media(max-width:640px){
+  .table-scroll{
+    max-height:360px;
+    overflow:auto;
+  }
+}
+
+
+/* v8.6：新增品項後自動選取提示 */
+.auto-selected{
+  background:#e8f4ec;
+  color:#267245;
+  border:1px solid #cde8d4;
+  padding:10px 12px;
+  border-radius:0 0 12px 12px;
+  font-weight:800;
+}
+
+
+/* v8.7：篩選工具列 */
+.compact-filter-card{
+  box-shadow:none;
+  border:1px solid var(--line);
+  background:#fbfcfb;
+}
+
+.filter-action-field{
+  display:flex;
+  align-items:flex-end;
+}
+
+.filter-action-field button{
+  width:100%;
+}
+
+@media(max-width:640px){
+  .filter-action-field{
+    padding-top:0;
+  }
+}
+
+
+/* v8.8：搜尋按鈕與篩選狀態 */
+.filter-status{
+  margin:8px 0 12px;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+}
+
+.filter-status.active{
+  color:var(--brand-dark);
+}
+
+@media(min-width:901px){
+  .compact-filter-card .form-grid{
+    grid-template-columns:1fr 1fr 150px 150px;
+  }
+}
+
+
+/* v8.9：叫貨人獨立篩選 */
+@media(min-width:901px){
+  .compact-filter-card .form-grid{
+    grid-template-columns:1fr 1fr 1.3fr 130px 150px;
+  }
+}
+
+
+/* v9：Google 登入外殼 */
+.auth-panel{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  background:linear-gradient(135deg,#f6f4ef,#e8f0ef);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.auth-panel.hidden{display:none}
+
+.auth-card{
+  width:min(420px,100%);
+  background:#fff;
+  border-radius:24px;
+  padding:28px;
+  box-shadow:0 20px 60px rgba(62,96,102,.18);
+  border:1px solid rgba(62,96,102,.12);
+}
+
+.auth-card h2{
+  margin:0 0 10px;
+  color:var(--brand-dark);
+}
+
+.auth-card p{
+  color:var(--muted);
+  line-height:1.6;
+}
+
+.auth-card button{
+  width:100%;
+  margin-top:10px;
+}
+
+.auth-note{
+  font-size:13px;
+  background:#f9f6eb;
+  border-radius:12px;
+  padding:10px;
+}
+
+.user-info-text{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:700;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:7px 10px;
+}
+
+body.is-logged-out main,
+body.is-logged-out header{
+  filter:blur(2px);
+  pointer-events:none;
+  user-select:none;
+}
+
+body.is-logged-in main,
+body.is-logged-in header{
+  filter:none;
+  pointer-events:auto;
+}
+
+@media(max-width:640px){
+  .user-info-text,
+  #logoutBtn,
+  #clearRoleBtn{
+    width:100%;
+    text-align:center;
+  }
+}
+
+
+/* v10：Firebase 同步狀態 */
+.sync-status-text{
+  font-size:12px;
+  color:#315d75;
+  font-weight:800;
+  background:#e3eef4;
+  border:1px solid #c9dde8;
+  border-radius:999px;
+  padding:7px 10px;
+}
+.sync-status-text.ok{color:#267245;background:#dff3e4;border-color:#b9dfc4}
+.sync-status-text.warn{color:#9a6a00;background:#fff1cf;border-color:#ead28b}
+.sync-status-text.bad{color:#a4382f;background:#ffe0dd;border-color:#efb8b1}
+.screenshot-preview{margin-top:10px;font-size:13px;color:var(--muted)}
+.screenshot-preview img{
+  display:block;
+  max-width:220px;
+  max-height:160px;
+  object-fit:contain;
+  border-radius:12px;
+  border:1px solid var(--line);
+  margin-top:8px;
+}
