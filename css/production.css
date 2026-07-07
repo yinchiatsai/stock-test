@@ -1,0 +1,125 @@
+/* Golden Bird Production Analysis V1 - safe module */
+.production-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.production-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.5;
+}
+
+.production-form-grid {
+  grid-template-columns: minmax(180px, 260px) minmax(240px, 1fr);
+}
+
+.production-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.production-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.production-summary-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(62, 96, 102, 0.16);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 8px 22px rgba(15, 39, 44, 0.06);
+}
+
+.production-summary-card span {
+  display: block;
+  color: #6b7f83;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.production-summary-card strong {
+  display: block;
+  font-size: 24px;
+  color: #26484e;
+}
+
+.production-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.production-table-wrap {
+  overflow-x: auto;
+}
+
+.production-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.production-table th,
+.production-table td {
+  border-bottom: 1px solid rgba(62, 96, 102, 0.12);
+  padding: 9px 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.production-table th {
+  color: #3e6066;
+  background: rgba(62, 96, 102, 0.06);
+  font-weight: 700;
+}
+
+.production-table td.num,
+.production-table th.num {
+  text-align: right;
+}
+
+.production-pre {
+  min-height: 120px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f7faf9;
+  border: 1px solid rgba(62, 96, 102, 0.14);
+  border-radius: 12px;
+  padding: 12px;
+  color: #2d4d52;
+  font-size: 13px;
+}
+
+.production-issue-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff1d6;
+  color: #8a5a00;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .production-layout,
+  .production-result-grid,
+  .production-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .production-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
