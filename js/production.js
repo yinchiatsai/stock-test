@@ -13,6 +13,11 @@
 
   const TAG_SET = new Set(["急件", "特急", "補", "補件", "樣品"]);
   const SIDE_WORDS = ["正", "背", "正面", "背面"];
+  const PRODUCTION_ATTRIBUTE_FAMILIES = {
+    side: ["正", "背", "正面", "背面"],
+    printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"]
+  };
+  const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
   const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "金", "銀", "黑", "白", "紅", "藍", "綠"];
 
   let lastAnalysis = null;
@@ -42,11 +47,11 @@
   }
 
   function splitPath(path) {
-    return String(path || "").split(/[\\/]+/).filter(Boolean);
+    return String(path || "").replace(/＿/g, "_").split(/[\\/]+/).filter(Boolean);
   }
 
   function firstProductionPart(base) {
-    return String(base || "").split("_")[0].trim();
+    return String(base || "").replace(/＿/g, "_").split("_")[0].trim();
   }
 
   function stripLeadingTokens(text) {
@@ -256,23 +261,47 @@
       .trim();
   }
 
-  function detectSide(baseName) {
-    const text = stripExtension(baseName);
-    const segments = text.split("_");
-    const last = segments[segments.length - 1] || "";
-    for (const word of SIDE_WORDS) {
-      const re = new RegExp(`^${word}\\d*$`);
-      if (re.test(last)) return word.includes("背") ? "背" : "正";
-    }
-    const m = text.match(/[_-](正面?|背面?)\d*($|[_-])/);
-    if (m) return m[1].includes("背") ? "背" : "正";
-    return "";
+  function normalizedBaseName(baseName) {
+    return stripExtension(baseName).replace(/＿/g, "_").trim();
   }
 
-  function removeSideForIdentity(baseName) {
-    return stripExtension(baseName)
-      .replace(/[_-](正面?|背面?)\d*$/g, "")
-      .replace(/[_-](正面?|背面?)\d*([_-])/g, "$2")
+  function normalizeProductionAttribute(attr) {
+    const value = String(attr || "").replace(/\d+$/g, "").trim();
+    if (["正", "正面"].includes(value)) return { attribute: "正", family: "side" };
+    if (["背", "背面"].includes(value)) return { attribute: "背", family: "side" };
+    if (["白", "白檔", "底白", "底色"].includes(value)) return { attribute: "白", family: "printLayer" };
+    if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
+    return { attribute: "", family: "" };
+  }
+
+  function detectProductionAttribute(baseName) {
+    const text = normalizedBaseName(baseName);
+    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
+    for (const segment of segments) {
+      const normalized = normalizeProductionAttribute(segment);
+      if (normalized.attribute) return normalized;
+    }
+    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色)\d*($|[_-])/);
+    if (m) return normalizeProductionAttribute(m[1]);
+    return { attribute: "", family: "" };
+  }
+
+  function detectSide(baseName) {
+    const detected = detectProductionAttribute(baseName);
+    return detected.family === "side" ? detected.attribute : "";
+  }
+
+  function removeProductionAttributesForIdentity(baseName) {
+    const text = normalizedBaseName(baseName);
+    return text
+      .split(/([_-]+)/)
+      .filter(part => {
+        if (/^[_-]+$/.test(part)) return true;
+        return !normalizeProductionAttribute(part).attribute;
+      })
+      .join("")
+      .replace(/[_-]{2,}/g, "_")
+      .replace(/^[_-]+|[_-]+$/g, "")
       .trim();
   }
 
@@ -358,8 +387,9 @@
     const process = entry.process || inferProcess(pathParts, dateValue);
     const folderCandidate = pathParts.length > 1 ? folderParseCandidate(pathParts) : null;
     const parsed = folderCandidate ? folderCandidate.parsed : parseFullName(filename);
-    const side = detectSide(base);
-    const identity = removeSideForIdentity(base);
+    const detectedAttribute = detectProductionAttribute(base);
+    const side = detectedAttribute.family === "side" ? detectedAttribute.attribute : "";
+    const identity = removeProductionAttributesForIdentity(base);
     const issues = [...parsed.issues];
 
     if (!parsed.product) issues.push("無法判斷商品名稱");
@@ -378,6 +408,8 @@
       stockDetails: buildStockDetails(parsed),
       qtyMode: parsed.qtyMode,
       side,
+      productionAttribute: detectedAttribute.attribute,
+      productionAttributeFamily: detectedAttribute.family,
       identity,
       filename,
       path: entry.path || filename,
@@ -385,6 +417,8 @@
       folderName: folderCandidate ? folderCandidate.folder : "",
       issues,
       mergedBySide: false,
+      mergedByProductionAttribute: false,
+      mergeReason: "",
       countedQuantity: parsed.quantity || 0
     };
   }
@@ -431,27 +465,39 @@
     });
   }
 
-  function applySideMerge(records) {
-    const sideGroups = new Map();
+  function applyProductionAttributeMerge(records) {
+    const groups = new Map();
     records.forEach(record => {
-      if (!record.side || record.folderPriority) return;
-      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${record.quantity}|${record.identity}`;
-      if (!sideGroups.has(key)) sideGroups.set(key, []);
-      sideGroups.get(key).push(record);
+      if (!record.productionAttribute || !record.productionAttributeFamily || record.folderPriority) return;
+      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${record.quantity}|${record.identity}|${record.productionAttributeFamily}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(record);
     });
 
-    sideGroups.forEach(group => {
-      const sides = new Set(group.map(r => r.side));
-      if (group.length >= 2 && sides.has("正") && sides.has("背")) {
+    groups.forEach(group => {
+      const attrs = new Set(group.map(r => r.productionAttribute));
+      const family = group[0]?.productionAttributeFamily || "";
+      const canMerge =
+        (family === "side" && attrs.has("正") && attrs.has("背")) ||
+        (family === "printLayer" && attrs.has("白") && attrs.has("彩"));
+
+      if (group.length >= 2 && canMerge) {
+        const reason = family === "side" ? "正/背製作檔合併" : "白/彩製作檔合併";
         group.forEach((record, index) => {
+          record.mergeReason = reason;
           if (index > 0) {
             record.countedQuantity = 0;
             record.stockDetails = [];
-            record.mergedBySide = true;
+            record.mergedByProductionAttribute = true;
+            if (family === "side") record.mergedBySide = true;
           }
         });
       }
     });
+  }
+
+  function applySideMerge(records) {
+    applyProductionAttributeMerge(records);
   }
 
   function summarize(records) {
@@ -507,7 +553,7 @@
     const totalQty = analysis.records.reduce((sum, r) => sum + (r.countedQuantity || 0), 0);
     const products = analysis.summary.productRows.length;
     const issues = analysis.summary.issues.length;
-    const merged = analysis.records.filter(r => r.mergedBySide || r.mergedByFolder).length;
+    const merged = analysis.records.filter(r => r.mergedBySide || r.mergedByFolder || r.mergedByProductionAttribute).length;
     $("productionSummaryCards").innerHTML = [
       ["掃描檔案", totalFiles],
       ["計算數量", totalQty],
@@ -553,7 +599,8 @@
       { label: "標籤", render: r => r.tags.join("、") || "無" },
       { label: "製程", key: "process" },
       { label: "顏色", render: r => r.colors.join("、") || "-" },
-      { label: "合併", render: r => r.mergedBySide ? "正背合併" : (r.mergedByFolder ? "資料夾優先" : "") },
+      { label: "製作屬性", render: r => r.productionAttribute || "-" },
+      { label: "合併", render: r => r.mergeReason || (r.mergedByFolder ? "資料夾優先" : "") },
       { label: "檔名", key: "filename" }
     ], "尚無明細");
 
@@ -574,6 +621,8 @@
       "(樣品)軍牌(單)(金,銀,玫瑰,黑)(各x20)_白_EM.ai",
       "黃銅吊飾(長)(雙)(x1)_王小明_正.ai",
       "黃銅吊飾(長)(雙)(x1)_王小明_背.ai",
+      "戒指盒_白_1EM_now314138.pdf",
+      "戒指盒_彩_1EM_now314138.pdf",
       "金屬製作檔/2026-07-07/名牌(玫瑰)(x100)/01.ai",
       "金屬製作檔/2026-07-07/名牌(玫瑰)(x100)/02.ai",
       "名牌(黑)(xx20).ai"
@@ -599,7 +648,7 @@
 
   function exportCsv() {
     if (!lastAnalysis) return;
-    const rows = [["日期", "製程", "來源", "標籤", "商品", "庫存扣料預覽", "計算數量", "原始數量", "單位", "顏色", "合併狀態", "檔名", "路徑", "異常"]];
+    const rows = [["日期", "製程", "來源", "標籤", "商品", "庫存扣料預覽", "計算數量", "原始數量", "單位", "顏色", "製作屬性", "合併狀態", "檔名", "路徑", "異常"]];
     lastAnalysis.records.forEach(r => rows.push([
       lastAnalysis.date,
       r.process,
@@ -611,7 +660,8 @@
       r.quantity,
       r.unit,
       r.colors.join("、"),
-      r.mergedBySide ? "正背合併" : (r.mergedByFolder ? "資料夾優先" : ""),
+      r.productionAttribute || "",
+      r.mergeReason || (r.mergedByFolder ? "資料夾優先" : ""),
       r.filename,
       r.path,
       r.issues.join("；")
@@ -644,7 +694,9 @@
       標籤: result.tags,
       規格或顏色: result.colors,
       模式: result.qtyMode,
+      製作屬性: result.productionAttribute || "無",
       製作面: result.side || "無",
+      唯一識別: result.identity,
       異常: result.issues
     }, null, 2);
   }
