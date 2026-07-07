@@ -13,7 +13,7 @@
 
   const TAG_SET = new Set(["急件", "特急", "補", "補件", "樣品"]);
   const SIDE_WORDS = ["正", "背", "正面", "背面"];
-  const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "金", "銀", "黑", "白", "紅", "藍", "綠"];
+  const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "金", "銀", "黑", "白", "紅", "藍", "綠"];
 
   let lastAnalysis = null;
 
@@ -99,6 +99,26 @@
     return normalized.split(",").map(x => x.trim()).filter(Boolean);
   }
 
+  function isKnownColorText(text) {
+    const value = String(text || "").trim();
+    if (!value) return false;
+    if (KNOWN_COLORS.includes(value)) return true;
+    if (/[，,、]/.test(value)) {
+      const parts = parseColorList(value);
+      return parts.length > 0 && parts.every(part => KNOWN_COLORS.includes(part));
+    }
+    return false;
+  }
+
+  function colorsFromLastMeaningfulGroup(text, groups, stopIndex) {
+    for (let i = stopIndex; i >= 0; i--) {
+      const group = groups[i];
+      if (!group) continue;
+      if (isKnownColorText(group.text)) return parseColorList(group.text);
+    }
+    return [];
+  }
+
   function parseProductAndQty(rawText) {
     let text = firstProductionPart(rawText).trim();
     const issues = [];
@@ -162,11 +182,12 @@
     if (last) {
       const qty = last.text.match(/^[xX×]\s*(\d+)$/);
       if (qty) {
+        const colors = colorsFromLastMeaningfulGroup(text, groups, groups.length - 2);
         return {
           product: cleanProduct(text.slice(0, last.start).trim()),
           quantity: Number(qty[1]),
           unitHint: "件",
-          colors: [],
+          colors,
           qtyMode: "explicit-qty",
           issues
         };
@@ -174,6 +195,22 @@
       if (/^[xX×]/.test(last.text) || /\d+/.test(last.text) && /[xX×]/.test(last.text)) {
         issues.push(`數量格式可能錯誤：(${last.text})`);
       }
+    }
+
+    // 相容舊式尾端數量：手機架(深)x2、名牌(黑)X20
+    const trailingQty = text.match(/^(.*?)[xX×]\s*(\d+)$/);
+    if (trailingQty && trailingQty[1].trim()) {
+      const productText = trailingQty[1].trim();
+      const productGroups = parseParenGroups(productText);
+      const colors = colorsFromLastMeaningfulGroup(productText, productGroups, productGroups.length - 1);
+      return {
+        product: cleanProduct(productText),
+        quantity: Number(trailingQty[2]),
+        unitHint: "件",
+        colors,
+        qtyMode: "trailing-qty",
+        issues: [...issues, "使用舊式尾端數量寫法，建議改為：(x數量)，例如：商品(深)(x2)"]
+      };
     }
 
     // 舊格式輔助：軍牌(單)上到下 金 銀 玫瑰 黑
@@ -195,7 +232,7 @@
       product: cleanProduct(text),
       quantity: 1,
       unitHint: "件",
-      colors: [],
+      colors: colorsFromLastMeaningfulGroup(text, groups, groups.length - 1),
       qtyMode: "default-1",
       issues
     };
