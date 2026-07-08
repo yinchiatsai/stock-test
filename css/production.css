@@ -340,3 +340,71 @@ main:has(#production:not(.hidden)) {
     font-size: 13px;
   }
 }
+
+/* V2.1 - 需要處理操作按鈕 */
+.production-rule-btn {
+  margin: 2px 4px 2px 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.production-table td .production-rule-btn {
+  display: inline-block;
+}
+@media (max-width: 760px) {
+  .production-rule-btn {
+    width: 100%;
+    margin: 3px 0;
+  }
+}
+
+/* V2.2 - 工作階段 / 交接進度 */
+.production-session-box {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #f8fbfa;
+  border: 1px solid rgba(62, 96, 102, 0.14);
+}
+.production-session-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  color: #284b51;
+  margin-bottom: 10px;
+}
+.production-session-head span {
+  color: #71868a;
+  font-size: 13px;
+  font-weight: 800;
+}
+.production-session-list {
+  display: grid;
+  gap: 8px;
+  color: #71868a;
+  font-size: 14px;
+  font-weight: 700;
+}
+.production-session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(62, 96, 102, 0.10);
+}
+.production-session-item strong {
+  color: #3e6066;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .production-session-head,
+  .production-session-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
