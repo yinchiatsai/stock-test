@@ -408,3 +408,48 @@ main:has(#production:not(.hidden)) {
     flex-direction: column;
   }
 }
+
+/* V2.4 - 商品使用量優先、平台統計縮小 */
+.production-products-section {
+  border-color: rgba(62, 96, 102, 0.18);
+}
+.production-products-section .production-table {
+  min-width: 520px;
+}
+.production-compact-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+.production-compact-stats > .card {
+  padding: 18px;
+  box-shadow: 0 10px 26px rgba(26, 56, 61, 0.05);
+}
+.production-compact-stats h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+.production-compact-stats .production-table {
+  min-width: 280px;
+  font-size: 13px;
+}
+.production-compact-stats .production-table th,
+.production-compact-stats .production-table td {
+  padding: 8px 8px;
+}
+.production-alias-btn {
+  margin: 2px 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .production-compact-stats {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .production-alias-btn {
+    width: 100%;
+  }
+}
