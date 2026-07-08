@@ -80,9 +80,9 @@
         <div>
           <p class="production-kicker">Production Center</p>
           <h2>📊 生產分析中心</h2>
-          <p class="production-subtitle">選擇製程日期資料夾後，系統只讀檔名並產生商品、平台、標籤與製程統計。</p>
+          <p class="production-subtitle">以「工作階段」累加多個製程或多天資料夾，方便交接與接續分析。</p>
         </div>
-        <span class="badge info production-version-badge">V2 UI 安全版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V2.2 工作階段版：只分析，不扣庫存</span>
       </div>
 
       <div class="production-dashboard-grid">
@@ -90,7 +90,7 @@
           <div class="production-card-head">
             <div>
               <h3>建立分析</h3>
-              <p class="note">請選擇當日資料夾，例如「金屬製作檔 &gt; 2026-07-07」。若要一次分析一週，請選擇「金屬製作檔」這一層，再使用日期區間。</p>
+              <p class="note">可選單一日期資料夾、製程資料夾，或包含多個製程的上層資料夾。每次分析會加入目前工作階段，不會覆蓋其他製程。</p>
             </div>
           </div>
 
@@ -135,8 +135,9 @@
           </details>
 
           <div class="production-actions production-actions-primary">
-            <button id="productionAnalyzeBtn" type="button">開始分析</button>
-            <button id="productionClearBtn" class="secondary" type="button">清空</button>
+            <button id="productionAnalyzeBtn" type="button">加入目前工作階段</button>
+            <button id="productionNewSessionBtn" class="secondary" type="button">重新開始工作階段</button>
+            <button id="productionClearBtn" class="secondary" type="button">清空畫面</button>
             <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
           </div>
         </div>
@@ -150,6 +151,13 @@
           </div>
           <div id="productionSummaryCards" class="production-summary-grid production-summary-grid-dashboard">
             <div class="production-summary-empty">尚未分析</div>
+          </div>
+          <div class="production-session-box">
+            <div class="production-session-head">
+              <strong>目前工作階段</strong>
+              <span id="productionSessionLabel">尚未建立</span>
+            </div>
+            <div id="productionSessionList" class="production-session-list">分析製程後會顯示進度。</div>
           </div>
         </aside>
       </div>
