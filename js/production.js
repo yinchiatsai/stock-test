@@ -47,7 +47,8 @@
   const SIDE_WORDS = ["正", "背", "正面", "背面"];
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
     side: ["正", "背", "正面", "背面"],
-    printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"]
+    printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"],
+    insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"]
   };
   const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
   const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "金", "銀", "黑", "白", "紅", "藍", "綠"];
@@ -58,6 +59,7 @@
   let lastRawEntries = [];
   let lastAnalysisOptions = null;
   let currentSession = createEmptySession();
+  let productSearchTerm = "";
 
   function createEmptySession() {
     return {
@@ -326,6 +328,8 @@
     if (["背", "背面"].includes(value)) return { attribute: "背", family: "side" };
     if (["白", "白檔", "底白", "底色"].includes(value)) return { attribute: "白", family: "printLayer" };
     if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
+    if (["內", "内", "裡", "裡面", "里面"].includes(value)) return { attribute: "內", family: "insideOutside" };
+    if (["外", "外面"].includes(value)) return { attribute: "外", family: "insideOutside" };
     return { attribute: "", family: "" };
   }
 
@@ -336,7 +340,7 @@
       const normalized = normalizeProductionAttribute(segment);
       if (normalized.attribute) return normalized;
     }
-    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色)\d*($|[_-])/);
+    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
     return { attribute: "", family: "" };
   }
@@ -487,13 +491,35 @@
     return record;
   }
 
+  function rememberProductAlias(fromProduct, toProduct) {
+    const from = String(fromProduct || "").trim();
+    const to = String(toProduct || "").trim();
+    if (!from || !to || from === to || from === "未解析") return;
+    runtimeRules.productAliases = { ...(runtimeRules.productAliases || {}), [from]: to };
+    saveRuntimeRules();
+  }
+
+  function applyProductToRecord(record, product, quantity, note) {
+    const target = String(product || "").trim();
+    if (!record || !target) return;
+    record.product = target;
+    if (Number.isFinite(quantity) && quantity >= 0) {
+      record.quantity = quantity;
+      record.countedQuantity = quantity;
+    }
+    record.variantDetails = [];
+    record.colors = [];
+    rebuildStockDetailsForRecord(record);
+    record.issues = (record.issues || []).filter(issue => !/缺少商品名稱|無法判斷商品名稱|數量無法判斷/.test(issue));
+    if (note) record.manualNote = note;
+  }
 
   function issueKey(filename, issue) {
     return `${filename}||${issue}`;
   }
 
   function applyManualItem(record) {
-    const manual = runtimeRules.manualItems?.[record.filename];
+    const manual = runtimeRules.manualItems?.[record.path] || runtimeRules.manualItems?.[record.filename];
     if (!manual) return record;
     if (manual.product) {
       record.product = manual.product;
@@ -540,6 +566,7 @@
       source: parsed.source,
       tags: parsed.tags,
       product: parsed.product || "未解析",
+      originalParsedProduct: parsed.product || "未解析",
       quantity: parsed.quantity || 0,
       unit: parsed.unitHint || "件",
       colors: parsed.colors,
@@ -626,10 +653,11 @@
       const family = group[0]?.productionAttributeFamily || "";
       const canMerge =
         (family === "side" && attrs.has("正") && attrs.has("背")) ||
-        (family === "printLayer" && attrs.has("白") && attrs.has("彩"));
+        (family === "printLayer" && attrs.has("白") && attrs.has("彩")) ||
+        (family === "insideOutside" && attrs.has("內") && attrs.has("外"));
 
       if (group.length >= 2 && canMerge) {
-        const reason = family === "side" ? "正/背製作檔合併" : "白/彩製作檔合併";
+        const reason = family === "side" ? "正/背製作檔合併" : (family === "printLayer" ? "白/彩製作檔合併" : "內/外製作檔合併");
         group.forEach((record, index) => {
           record.mergeReason = reason;
           if (index > 0) {
@@ -767,6 +795,16 @@
     `).join("");
   }
 
+
+  function updateProductionStatus(message, type = "idle") {
+    const el = $("productionStatusBox");
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove("is-running", "is-done");
+    if (type === "running") el.classList.add("is-running");
+    if (type === "done") el.classList.add("is-done");
+  }
+
   function resetSession() {
     currentSession = createEmptySession();
     lastAnalysis = null;
@@ -778,6 +816,7 @@
     });
     const exportBtn = $("productionExportCsvBtn");
     if (exportBtn) exportBtn.disabled = true;
+    updateProductionStatus("目前畫面已清空；未寫入庫存，也沒有儲存到雲端。", "idle");
   }
 
   function renderSummary(analysis) {
@@ -836,12 +875,17 @@
 
   function renderAnalysis(analysis) {
     renderSummary(analysis);
-    renderSimpleTable($("productionProductResult"), analysis.summary.productRows, [
+    const productRowsAll = analysis.summary.productRows || [];
+    const keyword = (productSearchTerm || "").trim().toLowerCase();
+    const productRows = keyword ? productRowsAll.filter(row => String(row.name || "").toLowerCase().includes(keyword)) : productRowsAll;
+    const productCountHint = $("productionProductCountHint");
+    if (productCountHint) productCountHint.textContent = keyword ? `顯示 ${productRows.length} / ${productRowsAll.length} 項` : `共 ${productRowsAll.length} 項`;
+    renderSimpleTable($("productionProductResult"), productRows, [
       { label: "商品", key: "name" },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
       { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">合併/改名</button>` }
-    ], "尚無商品統計");
+    ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
       { label: "平台", key: "name" },
       { label: "數量", key: "quantity", num: true }
@@ -866,6 +910,7 @@
       { label: "顏色", render: r => r.colors.join("、") || "-" },
       { label: "製作屬性", render: r => r.productionAttribute || "-" },
       { label: "合併", render: r => r.mergeReason || (r.mergedByFolder ? "資料夾優先" : "") },
+      { label: "操作", html: true, render: r => `<button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>` },
       { label: "檔名", key: "filename" }
     ], "尚無明細");
 
@@ -890,6 +935,8 @@
       "黃銅吊飾(長)(雙)(x1)_王小明_背.ai",
       "戒指盒_白_1EM_now314138.pdf",
       "戒指盒_彩_1EM_now314138.pdf",
+      "兩用名片架_yangyari_3LL_內.ai",
+      "兩用名片架_yangyari_3LL_外.ai",
       "金屬製作檔/2026-07-07/名牌(玫瑰)(x100)/01.ai",
       "金屬製作檔/2026-07-07/名牌(玫瑰)(x100)/02.ai",
       "名牌(黑)(xx20).ai"
@@ -897,6 +944,7 @@
   }
 
   function runAnalysis() {
+    updateProductionStatus("正在讀取資料夾與分析檔名…", "running");
     const mode = $("productionModeInput")?.value || "single";
     const dateValue = $("productionDateInput")?.value || todayString();
     const startDate = $("productionStartDateInput")?.value || dateValue;
@@ -906,10 +954,12 @@
     lastAnalysisOptions = { mode, dateValue, startDate, endDate };
     const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
     if (!rawEntries.length) {
+      updateProductionStatus("尚未選擇資料夾。請先選擇要分析的日期資料夾或製程資料夾。", "idle");
       alert("請先選擇要分析的資料夾。");
       return;
     }
     if (!entries.length) {
+      updateProductionStatus("沒有符合日期條件的檔名。請確認分析模式與日期範圍。", "idle");
       alert("所選資料夾中沒有符合日期條件的檔名。若你選的是日期資料夾，請確認分析日期相同；若要分析一週，請選製程資料夾那一層。");
       return;
     }
@@ -924,6 +974,7 @@
     lastAnalysis.rawCount = currentSession.records.length;
     renderSessionPanel();
     renderAnalysis(lastAnalysis);
+    updateProductionStatus(`分析完成：本次讀取 ${entries.length} 個檔名，目前分析共 ${currentSession.records.length} 筆明細。`, "done");
     $("productionSummaryCards")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1023,6 +1074,46 @@
     renderAnalysis(lastAnalysis);
   }
 
+
+  function handleRecordProductAction(event) {
+    const btn = event.target.closest(".production-record-product-btn");
+    if (!btn) return;
+    const path = btn.dataset.path || "";
+    const file = btn.dataset.file || "";
+    const record = currentSession.records.find(r => r.path === path) || currentSession.records.find(r => r.filename === file);
+    const currentName = record?.product || "";
+    const product = prompt("請輸入這一筆明細要計算成哪個商品名稱：", currentName);
+    if (!product || !product.trim()) return;
+    const qtyRaw = prompt("請輸入這一筆明細的計算數量：", String(record?.countedQuantity || record?.quantity || 1));
+    const qty = Number(qtyRaw || 1);
+    const finalQty = Number.isFinite(qty) && qty >= 0 ? qty : 1;
+    const key = path || file;
+
+    const permanent = confirm("要讓系統永久記住這個歸類嗎？\n\n按「確定」：之後相同解析名稱會自動歸到這個品項。\n按「取消」：只修正本次分析。")
+    const originalName = record?.originalParsedProduct || record?.originalProduct || record?.product || currentName;
+
+    if (permanent) {
+      rememberProductAlias(originalName, product.trim());
+    } else {
+      runtimeRules.manualItems = {
+        ...(runtimeRules.manualItems || {}),
+        [key]: { product: product.trim(), quantity: finalQty }
+      };
+      saveRuntimeRules();
+    }
+
+    currentSession.records.forEach(r => {
+      const sameRecord = (path && r.path === path) || (!path && r.filename === file);
+      const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
+      if (sameRecord || sameLearnedName) {
+        applyProductToRecord(r, product.trim(), sameRecord ? finalQty : r.countedQuantity || r.quantity || 1, permanent ? "永久規則" : "本次修正");
+      }
+    });
+    lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+    renderAnalysis(lastAnalysis);
+    updateProductionStatus(permanent ? "已建立商品學習規則，並套用到目前分析。" : "已套用單筆明細商品修正（只影響本次分析）。", "done");
+  }
+
   function handleIssueAction(event) {
     const btn = event.target.closest(".production-rule-btn");
     if (!btn) return;
@@ -1053,12 +1144,19 @@
       return;
     }
     if (action === "manual-product" && file) {
-      const product = prompt("請輸入本次要計算的商品名稱：", "");
+      const product = prompt("請輸入要計算的商品名稱：", "");
       if (!product) return;
       const qtyRaw = prompt("請輸入數量：", "1");
       const qty = Number(qtyRaw || 1);
-      runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [file]: { product: product.trim(), quantity: Number.isFinite(qty) && qty > 0 ? qty : 1 } };
-      saveRuntimeRules();
+      const finalQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+      const record = currentSession.records.find(r => r.filename === file || r.path === file);
+      const permanent = confirm("要讓系統永久記住這個歸類嗎？\n\n按「確定」：之後相同解析名稱會自動歸到這個品項。\n按「取消」：只修正本次分析。")
+      if (permanent && record) {
+        rememberProductAlias(record.originalParsedProduct || record.product, product.trim());
+      } else {
+        runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [file]: { product: product.trim(), quantity: finalQty } };
+        saveRuntimeRules();
+      }
       rerunLastAnalysis();
       return;
     }
@@ -1087,11 +1185,18 @@
     modeInput?.addEventListener("change", syncMode);
     syncMode();
     renderSessionPanel();
+    updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
     $("productionProductResult")?.addEventListener("click", handleProductAliasAction);
+    $("productionDetailResult")?.addEventListener("click", handleRecordProductAction);
+    $("productionProductSearchInput")?.addEventListener("input", event => {
+      productSearchTerm = event.target.value || "";
+      if (lastAnalysis) renderAnalysis(lastAnalysis);
+    });
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
+      if (currentSession.records.length && !confirm("清空目前畫面只會清除這個瀏覽器中的分析結果；目前版本尚未寫入庫存，也沒有儲存到雲端。確定清空嗎？")) return;
       const textarea = $("productionFilenameInput");
       if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
@@ -1101,7 +1206,7 @@
       resetSession();
     });
     $("productionNewSessionBtn")?.addEventListener("click", () => {
-      if (currentSession.records.length && !confirm("確定要重新開始工作階段？目前分析結果會清空，但不會影響庫存。")) return;
+      if (currentSession.records.length && !confirm("確定要開始新的分析？這會清除目前畫面上的分析結果；目前版本尚未寫入庫存，也不會刪除任何正式資料。")) return;
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
       resetSession();
