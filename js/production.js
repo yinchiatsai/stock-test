@@ -22,10 +22,10 @@
   function loadRuntimeRules() {
     try {
       const raw = localStorage.getItem(RULE_STORAGE_KEY);
-      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {} };
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, ...JSON.parse(raw) };
+      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, ...JSON.parse(raw) };
     } catch (error) {
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {} };
     }
   }
 
@@ -449,6 +449,44 @@
       .join("；") || "-";
   }
 
+  function aliasTarget(product) {
+    const aliases = runtimeRules.productAliases || {};
+    return aliases[product] || product;
+  }
+
+  function rebuildStockDetailsForRecord(record) {
+    const product = record.product || "未解析";
+    const qty = Number(record.quantity || 0);
+    const variants = record.variantDetails || [];
+    if (variants.length) {
+      record.stockDetails = variants.map(v => ({
+        item: `${product}(${v.name})`,
+        variant: v.name,
+        quantity: Number(v.quantity || 0),
+        unit: record.unit || "件",
+        note: "多色拆扣"
+      }));
+    } else {
+      record.stockDetails = [{
+        item: product,
+        variant: (record.colors && record.colors.length === 1) ? record.colors[0] : "",
+        quantity: qty,
+        unit: record.unit || "件",
+        note: "一般扣庫存"
+      }];
+    }
+  }
+
+  function applyProductAlias(record) {
+    const target = aliasTarget(record.product);
+    if (target && target !== record.product) {
+      record.originalProduct = record.product;
+      record.product = target;
+      rebuildStockDetailsForRecord(record);
+    }
+    return record;
+  }
+
 
   function issueKey(filename, issue) {
     return `${filename}||${issue}`;
@@ -506,6 +544,7 @@
       unit: parsed.unitHint || "件",
       colors: parsed.colors,
       perColorQty: parsed.perColorQty,
+      variantDetails: parsed.variantDetails || [],
       stockDetails: buildStockDetails(parsed),
       qtyMode: parsed.qtyMode,
       side,
@@ -514,6 +553,7 @@
       identity,
       filename,
       path: entry.path || filename,
+      sourceSignature: entry.sourceSignature || `${actualDate}|${filename}`,
       folderPriority: !!folderCandidate,
       folderName: folderCandidate ? folderCandidate.folder : "",
       unknownStartTokens: parsed.unknownStartTokens || [],
@@ -524,6 +564,7 @@
       countedQuantity: parsed.quantity || 0
     };
     applyManualItem(record);
+    applyProductAlias(record);
     applyIgnoredIssues(record);
     return record;
   }
@@ -546,7 +587,7 @@
     return Array.from(input.files).map(file => {
       const path = file.webkitRelativePath || file.name;
       const parts = splitPath(path);
-      return { path, filename: parts[parts.length - 1] || file.name, process: manualProcess || "" };
+      return { path, filename: parts[parts.length - 1] || file.name, process: manualProcess || "", sourceSignature: `${path}` };
     });
   }
 
@@ -686,16 +727,24 @@
 
   function addAnalysisToSession(analysis) {
     const incomingKeys = new Set(analysis.records.map(recordSessionKey));
+    const incomingSignatures = new Set(analysis.records.map(r => `${r.date || "無日期"}|${r.sourceSignature || r.filename}`));
+    const incomingNames = new Set(analysis.records.map(r => `${r.date || "無日期"}|${r.filename}`));
     // 同一日期＋同一製程重新分析時，預設覆蓋原本那組，避免重複累加。
-    currentSession.records = currentSession.records.filter(r => !incomingKeys.has(recordSessionKey(r)));
+    // 若第一次未填製程、第二次補上製程，同一日期＋同一批檔名也會覆蓋，避免同一資料夾被算兩次。
+    currentSession.records = currentSession.records.filter(r => {
+      const keyHit = incomingKeys.has(recordSessionKey(r));
+      const signatureHit = incomingSignatures.has(`${r.date || "無日期"}|${r.sourceSignature || r.filename}`);
+      const sameFilenameHit = incomingNames.has(`${r.date || "無日期"}|${r.filename}`) && (r.process === "未指定" || analysis.records.some(n => n.process !== r.process));
+      return !(keyHit || signatureHit || sameFilenameHit);
+    });
     currentSession.records.push(...analysis.records);
     currentSession.label = inferSessionLabel(currentSession.records, analysis.date);
     currentSession.updatedAt = new Date().toLocaleString("zh-TW", { hour12: false });
-    incomingKeys.forEach(key => {
-      currentSession.sources = currentSession.sources.filter(s => s.key !== key);
+    const sessionKeys = new Set(currentSession.records.map(recordSessionKey));
+    currentSession.sources = Array.from(sessionKeys).map(key => {
       const [date, process] = key.split("|");
-      const count = analysis.records.filter(r => recordSessionKey(r) === key).length;
-      currentSession.sources.push({ key, date, process, count, updatedAt: currentSession.updatedAt });
+      const count = currentSession.records.filter(r => recordSessionKey(r) === key).length;
+      return { key, date, process, count, updatedAt: currentSession.updatedAt };
     });
     currentSession.sources.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant"));
     return aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
@@ -751,7 +800,11 @@
       el.innerHTML = `<p>${escapeHtml(emptyText || "沒有資料")}</p>`;
       return;
     }
-    el.innerHTML = `<table class="production-table"><thead><tr>${columns.map(c => `<th class="${c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(c => `<td class="${c.num ? "num" : ""}">${escapeHtml(c.render ? c.render(row) : row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    el.innerHTML = `<table class="production-table"><thead><tr>${columns.map(c => `<th class="${c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(c => {
+      const value = c.render ? c.render(row) : row[c.key];
+      const content = c.html ? (value || "") : escapeHtml(value);
+      return `<td class="${c.num ? "num" : ""}">${content}</td>`;
+    }).join("")}</tr>`).join("")}</tbody></table>`;
   }
 
   function reviewSuggestion(record) {
@@ -786,7 +839,8 @@
     renderSimpleTable($("productionProductResult"), analysis.summary.productRows, [
       { label: "商品", key: "name" },
       { label: "數量", key: "quantity", num: true },
-      { label: "單位", key: "unit" }
+      { label: "單位", key: "unit" },
+      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">合併/改名</button>` }
     ], "尚無商品統計");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
       { label: "平台", key: "name" },
@@ -801,7 +855,8 @@
       { label: "數量", key: "quantity", num: true }
     ], "尚無製程統計");
 
-    renderSimpleTable($("productionDetailResult"), analysis.records, [
+    const detailRows = [...analysis.records].sort((a, b) => (b.countedQuantity || 0) - (a.countedQuantity || 0) || String(a.product).localeCompare(String(b.product), "zh-Hant"));
+    renderSimpleTable($("productionDetailResult"), detailRows, [
       { label: "計算", render: r => r.countedQuantity },
       { label: "商品", key: "product" },
       { label: "庫存扣料預覽", render: r => stockDetailsText(r.stockDetails) },
@@ -819,7 +874,7 @@
       { label: "商品", key: "product" },
       { label: "原因", render: r => r.issues.join("；") },
       { label: "建議處理", render: reviewSuggestion },
-      { label: "操作", render: renderIssueActions },
+      { label: "操作", render: renderIssueActions, html: true },
       { label: "檔名", key: "filename" }
     ], "目前沒有需要處理的項目");
 
@@ -947,6 +1002,27 @@
     renderAnalysis(lastAnalysis);
   }
 
+  function handleProductAliasAction(event) {
+    const btn = event.target.closest(".production-alias-btn");
+    if (!btn) return;
+    const product = btn.dataset.product || "";
+    if (!product) return;
+    const target = prompt("要將這個商品合併/改名為哪個名稱？\n例如：名牌(玫瑰金) → 名牌(玫瑰)", product);
+    if (!target || target.trim() === product) return;
+    runtimeRules.productAliases = { ...(runtimeRules.productAliases || {}), [product]: target.trim() };
+    saveRuntimeRules();
+    // 直接套用到目前工作階段的既有資料。
+    currentSession.records.forEach(record => {
+      if (record.product === product) {
+        record.originalProduct = record.product;
+        record.product = target.trim();
+        rebuildStockDetailsForRecord(record);
+      }
+    });
+    lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+    renderAnalysis(lastAnalysis);
+  }
+
   function handleIssueAction(event) {
     const btn = event.target.closest(".production-rule-btn");
     if (!btn) return;
@@ -1013,6 +1089,7 @@
     renderSessionPanel();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
+    $("productionProductResult")?.addEventListener("click", handleProductAliasAction);
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
       const textarea = $("productionFilenameInput");
