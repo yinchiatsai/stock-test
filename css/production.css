@@ -453,3 +453,54 @@ main:has(#production:not(.hidden)) {
     width: 100%;
   }
 }
+
+
+/* V2.6 flow simplification */
+.production-status-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f6faf9;
+  border: 1px solid rgba(62,96,102,.16);
+  color: #3e6066;
+  font-weight: 800;
+}
+.production-status-box.is-running {
+  background: #fff7e8;
+  border-color: rgba(194,139,43,.28);
+  color: #8a5b10;
+}
+.production-status-box.is-done {
+  background: #edf8f1;
+  border-color: rgba(61,137,84,.25);
+  color: #326745;
+}
+.production-product-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 12px;
+}
+.production-product-toolbar input {
+  max-width: 420px;
+  width: 100%;
+}
+.production-product-toolbar span {
+  color: #789096;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.production-table .action-cell {
+  white-space: nowrap;
+}
+.production-table button.small {
+  margin: 2px 4px 2px 0;
+}
+@media (max-width: 760px) {
+  .production-product-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .production-product-toolbar input { max-width: none; }
+}
