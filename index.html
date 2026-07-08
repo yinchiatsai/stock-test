@@ -80,9 +80,9 @@
         <div>
           <p class="production-kicker">Production Center</p>
           <h2>📊 生產分析中心</h2>
-          <p class="production-subtitle">以「工作階段」累加多個製程或多天資料夾，方便交接與接續分析。</p>
+          <p class="production-subtitle">選擇資料夾後直接分析；可連續加入多個製程或多天資料夾，系統會保留目前分析進度。</p>
         </div>
-        <span class="badge info production-version-badge">V2.4 分析合併版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V2.7 智慧學習版：只分析，不扣庫存</span>
       </div>
 
       <div class="production-dashboard-grid">
@@ -90,7 +90,7 @@
           <div class="production-card-head">
             <div>
               <h3>建立分析</h3>
-              <p class="note">可選單一日期資料夾、製程資料夾，或包含多個製程的上層資料夾。每次分析會加入目前工作階段，不會覆蓋其他製程。</p>
+              <p class="note">選擇要分析的日期資料夾或製程資料夾。按下分析後，結果會加入「目前分析」，不會覆蓋其他製程。</p>
             </div>
           </div>
 
@@ -135,11 +135,12 @@
           </details>
 
           <div class="production-actions production-actions-primary">
-            <button id="productionAnalyzeBtn" type="button">加入目前工作階段</button>
-            <button id="productionNewSessionBtn" class="secondary" type="button">重新開始工作階段</button>
-            <button id="productionClearBtn" class="secondary" type="button">清空畫面</button>
+            <button id="productionAnalyzeBtn" type="button">分析所選資料夾</button>
+            <button id="productionNewSessionBtn" class="secondary" type="button">開始新的分析</button>
+            <button id="productionClearBtn" class="secondary" type="button">清空目前畫面</button>
             <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
           </div>
+          <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
         </div>
 
         <aside class="card production-summary-panel">
@@ -154,10 +155,10 @@
           </div>
           <div class="production-session-box">
             <div class="production-session-head">
-              <strong>目前工作階段</strong>
+              <strong>目前分析進度</strong>
               <span id="productionSessionLabel">尚未建立</span>
             </div>
-            <div id="productionSessionList" class="production-session-list">分析製程後會顯示進度。</div>
+            <div id="productionSessionList" class="production-session-list">分析資料夾後會顯示進度。</div>
           </div>
         </aside>
       </div>
@@ -166,6 +167,10 @@
         <div class="production-section-title-row">
           <h3>商品使用量</h3>
           <span class="production-section-hint">分析完成後先看這裡；可用「合併/改名」整理未統一的品項名稱。</span>
+        </div>
+        <div class="production-product-toolbar">
+          <input id="productionProductSearchInput" placeholder="搜尋商品使用量，例如：名牌、軍牌、USB" />
+          <span id="productionProductCountHint">尚未分析</span>
         </div>
         <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
       </section>
@@ -200,6 +205,7 @@
           <div id="productionProcessResult" class="production-table-wrap">尚未分析</div>
         </div>
       </div>
+    </section>
 
     <!-- 在途商品 -->
     <section id="incoming" class="tab-panel hidden">
