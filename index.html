@@ -75,59 +75,94 @@
 
 
     <!-- 生產分析 -->
-    <section id="production" class="tab-panel hidden">
-      <div class="section-title">
-        <h2>每日生產分析</h2>
-        <span class="badge info">V1.06 安全版：只分析，不扣庫存</span>
+    <section id="production" class="tab-panel hidden production-center">
+      <div class="production-page-head">
+        <div>
+          <p class="production-kicker">Production Center</p>
+          <h2>📊 生產分析中心</h2>
+          <p class="production-subtitle">選擇製程日期資料夾後，系統只讀檔名並產生商品、平台、標籤與製程統計。</p>
+        </div>
+        <span class="badge info production-version-badge">V2 UI 安全版：只分析，不扣庫存</span>
       </div>
 
-      <div class="card production-card production-main-card">
-        <h3>建立分析</h3>
-        <p class="note">請直接選擇當日資料夾，例如「金屬製作檔 &gt; 2026-07-07」。若要一次分析一週，請選擇「金屬製作檔」這一層，再使用日期區間。</p>
-        <div class="form-grid production-form-grid">
-          <div class="field">
-            <label>分析模式</label>
-            <select id="productionModeInput">
-              <option value="single">單日分析</option>
-              <option value="range">日期區間 / 一週分析</option>
-              <option value="all">分析所選資料夾全部日期</option>
-            </select>
+      <div class="production-dashboard-grid">
+        <div class="card production-card production-control-card">
+          <div class="production-card-head">
+            <div>
+              <h3>建立分析</h3>
+              <p class="note">請選擇當日資料夾，例如「金屬製作檔 &gt; 2026-07-07」。若要一次分析一週，請選擇「金屬製作檔」這一層，再使用日期區間。</p>
+            </div>
           </div>
-          <div class="field production-date-single">
-            <label>分析日期</label>
-            <input id="productionDateInput" type="date" />
+
+          <div class="production-control-grid">
+            <div class="field">
+              <label>分析模式</label>
+              <select id="productionModeInput">
+                <option value="single">單日分析</option>
+                <option value="range">日期區間 / 一週分析</option>
+                <option value="all">分析所選資料夾全部日期</option>
+              </select>
+            </div>
+            <div class="field production-date-single">
+              <label>分析日期</label>
+              <input id="productionDateInput" type="date" />
+            </div>
+            <div class="field production-date-range hidden">
+              <label>開始日期</label>
+              <input id="productionStartDateInput" type="date" />
+            </div>
+            <div class="field production-date-range hidden">
+              <label>結束日期</label>
+              <input id="productionEndDateInput" type="date" />
+            </div>
           </div>
-          <div class="field production-date-range hidden">
-            <label>開始日期</label>
-            <input id="productionStartDateInput" type="date" />
+
+          <div class="production-folder-panel">
+            <div class="field production-folder-field">
+              <label>選擇資料夾</label>
+              <input id="productionFileInput" type="file" multiple webkitdirectory directory />
+            </div>
+            <div class="field production-process-field">
+              <label>製程名稱（選日期資料夾時可填）</label>
+              <input id="productionProcessInput" placeholder="例如：金屬製作檔、彩印製作檔" />
+            </div>
           </div>
-          <div class="field production-date-range hidden">
-            <label>結束日期</label>
-            <input id="productionEndDateInput" type="date" />
-          </div>
-          <div class="field">
-            <label>製程名稱（選日期資料夾時可填）</label>
-            <input id="productionProcessInput" placeholder="例如：金屬製作檔、彩印製作檔" />
-            <p class="note">如果你選的是「金屬製作檔」這層，系統會自動判斷製程；如果你直接選「2026-07-07」日期資料夾，建議填寫製程名稱。</p>
-          </div>
-          <div class="field production-folder-field">
-            <label>選擇資料夾</label>
-            <input id="productionFileInput" type="file" multiple webkitdirectory directory />
-            <p class="note">網頁版只讀檔名，不讀檔案內容；副檔名不影響分析。</p>
+
+          <details class="production-help-box">
+            <summary>操作說明</summary>
+            <p>如果選的是「金屬製作檔」這層，系統會依日期資料夾判斷製程；如果直接選「2026-07-07」日期資料夾，建議填寫製程名稱。</p>
+            <p>網頁版只讀檔名，不讀檔案內容；副檔名不影響分析。</p>
+          </details>
+
+          <div class="production-actions production-actions-primary">
+            <button id="productionAnalyzeBtn" type="button">開始分析</button>
+            <button id="productionClearBtn" class="secondary" type="button">清空</button>
+            <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
           </div>
         </div>
 
-        <div class="production-actions">
-          <button id="productionAnalyzeBtn" type="button">開始分析</button>
-          <button id="productionClearBtn" class="secondary" type="button">清空</button>
-          <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
-        </div>
-        <p class="note">此版本只在瀏覽器內分析，不會寫入庫存、不會修改 Firebase 資料。</p>
+        <aside class="card production-summary-panel">
+          <div class="production-card-head">
+            <div>
+              <h3>今日分析摘要</h3>
+              <p class="note">分析完成後會自動更新。</p>
+            </div>
+          </div>
+          <div id="productionSummaryCards" class="production-summary-grid production-summary-grid-dashboard">
+            <div class="production-summary-empty">尚未分析</div>
+          </div>
+        </aside>
       </div>
 
-      <div id="productionSummaryCards" class="production-summary-grid"></div>
+      <section class="production-section-card card production-issues-section">
+        <div class="production-section-title-row">
+          <h3>需要處理</h3>
+          <span class="production-section-hint">只顯示真正需要人工確認的項目</span>
+        </div>
+        <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
+      </section>
 
-      <div class="production-result-grid">
+      <div class="production-result-grid production-result-grid-dashboard">
         <div class="card">
           <h3>商品使用量</h3>
           <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
@@ -146,16 +181,13 @@
         </div>
       </div>
 
-      <div class="card">
-        <h3>明細</h3>
+      <section class="production-section-card card">
+        <div class="production-section-title-row">
+          <h3>分析明細</h3>
+          <span class="production-section-hint">保留原始檔名，方便回查。</span>
+        </div>
         <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
-      </div>
-
-      <div class="card">
-        <h3>需要處理</h3>
-        <p class="note">這裡只列出真正需要人工確認的項目；標籤與來源會自動歸類。</p>
-        <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
-      </div>
+      </section>
     </section>
 
     <!-- 在途商品 -->
