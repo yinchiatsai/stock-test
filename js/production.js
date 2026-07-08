@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const SOURCE_MAP = {
+  const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
     p: "Pinkoi",
     G: "LINE GIFT",
@@ -11,7 +11,39 @@
     B2B: "企業訂單"
   };
 
-  const TAG_SET = new Set(["急件", "特急", "更特急", "快過期", "先刻", "先印", "補", "補件", "樣品"]);
+  const DEFAULT_TAGS = [
+    "急件", "特急", "更特急", "快過期", "今天過期", "今日過期",
+    "先刻", "先印", "補", "補件", "補寄", "樣品", "老闆分"
+  ];
+
+  const RULE_STORAGE_KEY = "GB_PRODUCTION_ANALYZER_RULES_V1";
+  const runtimeRules = loadRuntimeRules();
+
+  function loadRuntimeRules() {
+    try {
+      const raw = localStorage.getItem(RULE_STORAGE_KEY);
+      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, ...JSON.parse(raw) };
+    } catch (error) {
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {} };
+    }
+  }
+
+  function saveRuntimeRules() {
+    localStorage.setItem(RULE_STORAGE_KEY, JSON.stringify(runtimeRules));
+  }
+
+  function sourceMap() {
+    return { ...DEFAULT_SOURCE_MAP, ...(runtimeRules.customSources || {}) };
+  }
+
+  function tagSet() {
+    return new Set([...DEFAULT_TAGS, ...(runtimeRules.customTags || [])]);
+  }
+
+  function normalizeTagName(tag) {
+    return tag === "補" ? "補件" : tag;
+  }
   const SIDE_WORDS = ["正", "背", "正面", "背面"];
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
     side: ["正", "背", "正面", "背面"],
@@ -23,6 +55,19 @@
   const DESIGNER_CODE_RE = /^\d+[A-Z]{2,4}$/i;
 
   let lastAnalysis = null;
+  let lastRawEntries = [];
+  let lastAnalysisOptions = null;
+  let currentSession = createEmptySession();
+
+  function createEmptySession() {
+    return {
+      id: `session-${Date.now()}`,
+      label: "尚未建立",
+      records: [],
+      sources: [],
+      updatedAt: ""
+    };
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -76,19 +121,23 @@
     let source = "蝦皮";
     const tags = [];
     const unknownStartTokens = [];
+    const sources = sourceMap();
+    const tagsKnown = tagSet();
+    const ignored = new Set(runtimeRules.ignoredTokens || []);
 
     tokens.forEach(raw => {
       const token = raw.trim();
-      if (SOURCE_MAP[token]) {
-        source = SOURCE_MAP[token];
-      } else if (TAG_SET.has(token)) {
-        tags.push(token === "補" ? "補件" : token);
+      if (!token || ignored.has(token)) return;
+      if (sources[token]) {
+        source = sources[token];
+      } else if (tagsKnown.has(token)) {
+        tags.push(normalizeTagName(token));
       } else {
         unknownStartTokens.push(token);
       }
     });
 
-    return { source, tags, unknownStartTokens };
+    return { source, tags: Array.from(new Set(tags)), unknownStartTokens };
   }
 
   function parseParenGroups(text) {
@@ -362,6 +411,7 @@
       perColorQty: parsed.perColorQty || "",
       variantDetails: parsed.variantDetails || [],
       qtyMode: parsed.qtyMode,
+      unknownStartTokens: classified.unknownStartTokens,
       issues: [...(parsed.issues || []), ...classified.unknownStartTokens.map(t => `未知開頭標記：(${t})`)]
     };
   }
@@ -399,6 +449,36 @@
       .join("；") || "-";
   }
 
+
+  function issueKey(filename, issue) {
+    return `${filename}||${issue}`;
+  }
+
+  function applyManualItem(record) {
+    const manual = runtimeRules.manualItems?.[record.filename];
+    if (!manual) return record;
+    if (manual.product) {
+      record.product = manual.product;
+      record.stockDetails = [{
+        item: manual.product,
+        variant: "",
+        quantity: Number(manual.quantity || record.quantity || 1),
+        unit: record.unit || "件",
+        note: "人工指定"
+      }];
+      record.quantity = Number(manual.quantity || record.quantity || 1);
+      record.countedQuantity = record.quantity;
+      record.issues = record.issues.filter(issue => !/缺少商品名稱|無法判斷商品名稱|數量無法判斷/.test(issue));
+    }
+    return record;
+  }
+
+  function applyIgnoredIssues(record) {
+    const ignoredIssues = new Set(runtimeRules.ignoredIssues || []);
+    record.issues = (record.issues || []).filter(issue => !ignoredIssues.has(issueKey(record.filename, issue)));
+    return record;
+  }
+
   function parseEntry(entry, dateValue) {
     const pathParts = splitPath(entry.path || entry.filename);
     const filename = entry.filename || pathParts[pathParts.length - 1] || "";
@@ -416,7 +496,7 @@
     if (!parsed.product) issues.push("無法判斷商品名稱");
     if (!Number.isFinite(parsed.quantity) || parsed.quantity <= 0) issues.push("數量無法判斷");
 
-    return {
+    const record = {
       date: actualDate,
       process,
       source: parsed.source,
@@ -436,12 +516,16 @@
       path: entry.path || filename,
       folderPriority: !!folderCandidate,
       folderName: folderCandidate ? folderCandidate.folder : "",
+      unknownStartTokens: parsed.unknownStartTokens || [],
       issues,
       mergedBySide: false,
       mergedByProductionAttribute: false,
       mergeReason: "",
       countedQuantity: parsed.quantity || 0
     };
+    applyManualItem(record);
+    applyIgnoredIssues(record);
+    return record;
   }
 
   function entriesFromTextarea() {
@@ -580,6 +664,73 @@
     };
   }
 
+
+  function aggregateAnalysisFromRecords(records, label) {
+    return {
+      date: label || "目前工作階段",
+      records,
+      summary: summarize(records)
+    };
+  }
+
+  function recordSessionKey(record) {
+    return `${record.date || "無日期"}|${record.process || "未指定"}`;
+  }
+
+  function inferSessionLabel(records, fallback) {
+    const dates = Array.from(new Set(records.map(r => r.date).filter(Boolean))).sort();
+    if (!dates.length) return fallback || "目前工作階段";
+    if (dates.length === 1) return dates[0];
+    return `${dates[0]} ~ ${dates[dates.length - 1]}`;
+  }
+
+  function addAnalysisToSession(analysis) {
+    const incomingKeys = new Set(analysis.records.map(recordSessionKey));
+    // 同一日期＋同一製程重新分析時，預設覆蓋原本那組，避免重複累加。
+    currentSession.records = currentSession.records.filter(r => !incomingKeys.has(recordSessionKey(r)));
+    currentSession.records.push(...analysis.records);
+    currentSession.label = inferSessionLabel(currentSession.records, analysis.date);
+    currentSession.updatedAt = new Date().toLocaleString("zh-TW", { hour12: false });
+    incomingKeys.forEach(key => {
+      currentSession.sources = currentSession.sources.filter(s => s.key !== key);
+      const [date, process] = key.split("|");
+      const count = analysis.records.filter(r => recordSessionKey(r) === key).length;
+      currentSession.sources.push({ key, date, process, count, updatedAt: currentSession.updatedAt });
+    });
+    currentSession.sources.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant"));
+    return aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+  }
+
+  function renderSessionPanel() {
+    const labelEl = $("productionSessionLabel");
+    const listEl = $("productionSessionList");
+    if (labelEl) labelEl.textContent = currentSession.label || "尚未建立";
+    if (!listEl) return;
+    if (!currentSession.sources.length) {
+      listEl.innerHTML = "分析製程後會顯示進度。";
+      return;
+    }
+    listEl.innerHTML = currentSession.sources.map(source => `
+      <div class="production-session-item">
+        <span>✓ ${escapeHtml(source.date)}｜${escapeHtml(source.process)}</span>
+        <strong>${escapeHtml(source.count)} 檔</strong>
+      </div>
+    `).join("");
+  }
+
+  function resetSession() {
+    currentSession = createEmptySession();
+    lastAnalysis = null;
+    renderSessionPanel();
+    $("productionSummaryCards").innerHTML = '<div class="production-summary-empty">尚未分析</div>';
+    ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueResult"].forEach(id => {
+      const el = $(id);
+      if (el) el.textContent = "尚未分析";
+    });
+    const exportBtn = $("productionExportCsvBtn");
+    if (exportBtn) exportBtn.disabled = true;
+  }
+
   function renderSummary(analysis) {
     const totalFiles = analysis.records.length;
     const totalQty = analysis.records.reduce((sum, r) => sum + (r.countedQuantity || 0), 0);
@@ -605,11 +756,29 @@
 
   function reviewSuggestion(record) {
     const issueText = (record.issues || []).join("；");
-    if (/舊式尾端數量/.test(issueText)) return "建議改成 商品(x數量) 後重新分析";
+    if (/舊式尾端數量/.test(issueText)) return "已可計算；可按『忽略提醒』，或之後改成 (x數量)";
     if (/數量格式/.test(issueText)) return "請修正 (x數量)，例如 (x20)";
-    if (/缺少商品|無法判斷商品/.test(issueText)) return "請補上商品名稱";
-    if (/未知開頭標記/.test(issueText)) return "若是新來源或新標籤，後續可加入設定";
-    return "確認是否需要新增規則；目前安全版不會自動修改檔名";
+    if (/缺少商品|無法判斷商品/.test(issueText)) return "可按『指定商品』補上本次商品名稱";
+    if (/未知開頭標記/.test(issueText)) return "可直接設為標籤、來源或忽略";
+    return "確認是否需要新增規則";
+  }
+
+  function renderIssueActions(record) {
+    const issueText = (record.issues || []).join("；");
+    const token = (record.unknownStartTokens || [])[0] || "";
+    const buttons = [];
+    if (token) {
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-tag" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">設為標籤</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-source" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">設為來源</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-ignore" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">忽略此標記</button>`);
+    }
+    if (/缺少商品|無法判斷商品/.test(issueText) || record.product === "未解析") {
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="manual-product" data-file="${escapeHtml(record.filename)}">指定商品</button>`);
+    }
+    if (/舊式尾端數量/.test(issueText)) {
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="ignore-warning" data-file="${escapeHtml(record.filename)}" data-issue="${escapeHtml((record.issues || [])[0] || "")}">忽略提醒</button>`);
+    }
+    return buttons.join(" ") || "請依建議修正檔名後重新分析";
   }
 
   function renderAnalysis(analysis) {
@@ -650,6 +819,7 @@
       { label: "商品", key: "product" },
       { label: "原因", render: r => r.issues.join("；") },
       { label: "建議處理", render: reviewSuggestion },
+      { label: "操作", render: renderIssueActions },
       { label: "檔名", key: "filename" }
     ], "目前沒有需要處理的項目");
 
@@ -677,6 +847,8 @@
     const startDate = $("productionStartDateInput")?.value || dateValue;
     const endDate = $("productionEndDateInput")?.value || startDate;
     const rawEntries = [...entriesFromFileInput(), ...entriesFromTextarea()];
+    lastRawEntries = rawEntries;
+    lastAnalysisOptions = { mode, dateValue, startDate, endDate };
     const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
     if (!rawEntries.length) {
       alert("請先選擇要分析的資料夾。");
@@ -686,10 +858,16 @@
       alert("所選資料夾中沒有符合日期條件的檔名。若你選的是日期資料夾，請確認分析日期相同；若要分析一週，請選製程資料夾那一層。");
       return;
     }
-    lastAnalysis = analyze(entries, mode === "range" ? `${startDate}~${endDate}` : dateValue);
-    lastAnalysis.mode = mode;
-    lastAnalysis.filteredCount = entries.length;
-    lastAnalysis.rawCount = rawEntries.length;
+    const analysisLabel = mode === "range" ? `${startDate}~${endDate}` : (mode === "all" ? "全部日期" : dateValue);
+    const thisAnalysis = analyze(entries, analysisLabel);
+    thisAnalysis.mode = mode;
+    thisAnalysis.filteredCount = entries.length;
+    thisAnalysis.rawCount = rawEntries.length;
+    lastAnalysis = addAnalysisToSession(thisAnalysis);
+    lastAnalysis.mode = "session";
+    lastAnalysis.filteredCount = currentSession.records.length;
+    lastAnalysis.rawCount = currentSession.records.length;
+    renderSessionPanel();
     renderAnalysis(lastAnalysis);
     $("productionSummaryCards")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -755,6 +933,67 @@
     }, null, 2);
   }
 
+
+  function rerunLastAnalysis() {
+    if (!lastRawEntries.length || !lastAnalysisOptions) return;
+    const { mode, dateValue, startDate, endDate } = lastAnalysisOptions;
+    const entries = filterEntriesByMode(lastRawEntries, mode, dateValue, startDate, endDate);
+    const thisAnalysis = analyze(entries, mode === "range" ? `${startDate}~${endDate}` : dateValue);
+    lastAnalysis = addAnalysisToSession(thisAnalysis);
+    lastAnalysis.mode = "session";
+    lastAnalysis.filteredCount = currentSession.records.length;
+    lastAnalysis.rawCount = currentSession.records.length;
+    renderSessionPanel();
+    renderAnalysis(lastAnalysis);
+  }
+
+  function handleIssueAction(event) {
+    const btn = event.target.closest(".production-rule-btn");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const token = btn.dataset.token || "";
+    const file = btn.dataset.file || "";
+    if (action === "token-tag" && token) {
+      const label = prompt(`將 (${token}) 設為標籤名稱：`, token);
+      if (!label) return;
+      runtimeRules.customTags = Array.from(new Set([...(runtimeRules.customTags || []), label.trim()]));
+      if (label.trim() !== token) runtimeRules.customTags = Array.from(new Set([...(runtimeRules.customTags || []), token]));
+      saveRuntimeRules();
+      rerunLastAnalysis();
+      return;
+    }
+    if (action === "token-source" && token) {
+      const sourceName = prompt(`將 (${token}) 設為來源名稱：`, token);
+      if (!sourceName) return;
+      runtimeRules.customSources = { ...(runtimeRules.customSources || {}), [token]: sourceName.trim() };
+      saveRuntimeRules();
+      rerunLastAnalysis();
+      return;
+    }
+    if (action === "token-ignore" && token) {
+      runtimeRules.ignoredTokens = Array.from(new Set([...(runtimeRules.ignoredTokens || []), token]));
+      saveRuntimeRules();
+      rerunLastAnalysis();
+      return;
+    }
+    if (action === "manual-product" && file) {
+      const product = prompt("請輸入本次要計算的商品名稱：", "");
+      if (!product) return;
+      const qtyRaw = prompt("請輸入數量：", "1");
+      const qty = Number(qtyRaw || 1);
+      runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [file]: { product: product.trim(), quantity: Number.isFinite(qty) && qty > 0 ? qty : 1 } };
+      saveRuntimeRules();
+      rerunLastAnalysis();
+      return;
+    }
+    if (action === "ignore-warning" && file) {
+      const issue = btn.dataset.issue || "";
+      if (issue) runtimeRules.ignoredIssues = Array.from(new Set([...(runtimeRules.ignoredIssues || []), issueKey(file, issue)]));
+      saveRuntimeRules();
+      rerunLastAnalysis();
+    }
+  }
+
   function init() {
     if (!$("production")) return;
     const dateInput = $("productionDateInput");
@@ -771,7 +1010,9 @@
     };
     modeInput?.addEventListener("change", syncMode);
     syncMode();
+    renderSessionPanel();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
+    $("productionIssueResult")?.addEventListener("click", handleIssueAction);
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
       const textarea = $("productionFilenameInput");
@@ -780,13 +1021,13 @@
       if (fileInput) fileInput.value = "";
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
-      lastAnalysis = null;
-      $("productionSummaryCards").innerHTML = "";
-      ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueResult"].forEach(id => {
-        const el = $(id);
-        if (el) el.textContent = "尚未分析";
-      });
-      $("productionExportCsvBtn").disabled = true;
+      resetSession();
+    });
+    $("productionNewSessionBtn")?.addEventListener("click", () => {
+      if (currentSession.records.length && !confirm("確定要重新開始工作階段？目前分析結果會清空，但不會影響庫存。")) return;
+      const fileInput = $("productionFileInput");
+      if (fileInput) fileInput.value = "";
+      resetSession();
     });
     $("productionExportCsvBtn")?.addEventListener("click", exportCsv);
     $("productionSingleTestBtn")?.addEventListener("click", singleTest);
