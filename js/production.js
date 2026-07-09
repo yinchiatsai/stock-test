@@ -877,9 +877,9 @@
       return;
     }
     listEl.innerHTML = currentSession.sources.map(source => `
-      <div class="production-session-item">
-        <span>✓ ${escapeHtml(source.date)}｜${escapeHtml(source.process)}</span>
-        <strong>${escapeHtml(source.count)} 檔</strong>
+      <div class="production-session-item" data-key="${escapeHtml(source.key)}">
+        <span>✓ ${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span>
+        <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong><button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改製程</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button></span>
       </div>
     `).join("");
   }
@@ -905,7 +905,7 @@
     });
     const exportBtn = $("productionExportCsvBtn");
     if (exportBtn) exportBtn.disabled = true;
-    updateProductionStatus("目前畫面已清空；未寫入庫存，也沒有儲存到雲端。", "idle");
+    updateProductionStatus("目前畫面已清空；此版本只清除瀏覽器畫面，沒有寫入庫存，也沒有雲端留存。", "idle");
   }
 
   function renderSummary(analysis) {
@@ -919,7 +919,7 @@
       ["計算數量", totalQty],
       ["商品種類", products],
       ["合併檔案", merged],
-      ["需要處理", issues]
+      ["待確認", issues]
     ].map(([label, value]) => `<div class="production-summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
   }
 
@@ -991,10 +991,10 @@
 
   function reviewSuggestion(record) {
     const issueText = (record.issues || []).join("；");
-    if (/舊式尾端數量/.test(issueText)) return "已可計算；可按『忽略提醒』，或之後改成 (x數量)";
+    if (/舊式尾端數量/.test(issueText)) return "已可計算；可按『保持原格式（仍計算）』，或之後改成 (x數量)";
     if (/數量格式/.test(issueText)) return "請修正 (x數量)，例如 (x20)";
     if (/缺少商品|無法判斷商品/.test(issueText)) return "可按『指定商品』補上本次商品名稱";
-    if (/未知開頭標記/.test(issueText)) return "可直接設為標籤、來源或忽略";
+    if (/未知開頭標記/.test(issueText)) return "可直接加入標籤、來源或忽略";
     return "確認是否需要新增規則";
   }
 
@@ -1003,15 +1003,15 @@
     const token = (record.unknownStartTokens || [])[0] || "";
     const buttons = [];
     if (token) {
-      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-tag" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">設為標籤</button>`);
-      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-source" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">設為來源</button>`);
-      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-ignore" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">忽略此標記</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-tag" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">加入標籤</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-source" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">加入來源</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="token-ignore" data-token="${escapeHtml(token)}" data-file="${escapeHtml(record.filename)}">本次略過標記（仍計入商品）</button>`);
     }
     if (/缺少商品|無法判斷商品/.test(issueText) || record.product === "未解析") {
       buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="manual-product" data-file="${escapeHtml(record.filename)}">指定商品</button>`);
     }
     if (/舊式尾端數量/.test(issueText)) {
-      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="ignore-warning" data-file="${escapeHtml(record.filename)}" data-issue="${escapeHtml((record.issues || [])[0] || "")}">忽略提醒</button>`);
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="ignore-warning" data-file="${escapeHtml(record.filename)}" data-issue="${escapeHtml((record.issues || [])[0] || "")}">保持原格式（仍計算）</button>`);
     }
     return buttons.join(" ") || "請依建議修正檔名後重新分析";
   }
@@ -1028,7 +1028,7 @@
       { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}` },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
-      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">合併/改名</button>` }
+      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">整理品項</button>` }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
     renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
@@ -1066,7 +1066,7 @@
       { label: "建議處理", render: reviewSuggestion },
       { label: "操作", render: renderIssueActions, html: true },
       { label: "檔名", key: "filename" }
-    ], "目前沒有需要處理的項目");
+    ], "目前沒有待確認的項目");
 
     $("productionExportCsvBtn").disabled = false;
   }
@@ -1212,11 +1212,9 @@
     if (!btn) return;
     const product = btn.dataset.product || "";
     if (!product) return;
-    const target = prompt("要將這個商品合併/改名為哪個名稱？\n例如：名牌(玫瑰金) → 名牌(玫瑰)", product);
+    const target = prompt("要將這個商品整理為哪個名稱？\n例如：名牌(玫瑰金) → 名牌(玫瑰)", product);
     if (!target || target.trim() === product) return;
-    runtimeRules.productAliases = { ...(runtimeRules.productAliases || {}), [product]: target.trim() };
-    saveRuntimeRules();
-    // 直接套用到目前工作階段的既有資料。
+    // 「整理品項」只影響目前工作階段，不建立永久規則。
     currentSession.records.forEach(record => {
       if (record.product === product) {
         record.originalProduct = record.product;
@@ -1275,7 +1273,7 @@
     const token = btn.dataset.token || "";
     const file = btn.dataset.file || "";
     if (action === "token-tag" && token) {
-      const label = prompt(`將 (${token}) 設為標籤名稱：`, token);
+      const label = prompt(`將 (${token}) 加入標籤名稱：`, token);
       if (!label) return;
       runtimeRules.customTags = Array.from(new Set([...(runtimeRules.customTags || []), label.trim()]));
       if (label.trim() !== token) runtimeRules.customTags = Array.from(new Set([...(runtimeRules.customTags || []), token]));
@@ -1284,7 +1282,7 @@
       return;
     }
     if (action === "token-source" && token) {
-      const sourceName = prompt(`將 (${token}) 設為來源名稱：`, token);
+      const sourceName = prompt(`將 (${token}) 加入來源名稱：`, token);
       if (!sourceName) return;
       runtimeRules.customSources = { ...(runtimeRules.customSources || {}), [token]: sourceName.trim() };
       saveRuntimeRules();
@@ -1295,6 +1293,7 @@
       runtimeRules.ignoredTokens = Array.from(new Set([...(runtimeRules.ignoredTokens || []), token]));
       saveRuntimeRules();
       rerunLastAnalysis();
+      updateProductionStatus("已本次/本機略過此標記；商品仍會照常計算。", "done");
       return;
     }
     if (action === "manual-product" && file) {
@@ -1322,6 +1321,42 @@
     }
   }
 
+
+  function handleSessionAction(event) {
+    const editBtn = event.target.closest(".production-session-edit-btn");
+    const removeBtn = event.target.closest(".production-session-remove-btn");
+    if (!editBtn && !removeBtn) return;
+    const key = (editBtn || removeBtn).dataset.key || "";
+    if (!key) return;
+    const source = currentSession.sources.find(s => s.key === key);
+    if (!source) return;
+    if (editBtn) {
+      const nextName = prompt("請輸入新的製程名稱：", source.process || "");
+      if (!nextName || !nextName.trim()) return;
+      currentSession.records.forEach(record => {
+        if (recordSessionKey(record) === key) record.process = nextName.trim();
+      });
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      addAnalysisToSession({ records: [], date: currentSession.label });
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderSessionPanel();
+      renderAnalysis(lastAnalysis);
+      updateProductionStatus("已修改製程名稱，不需要重新上傳資料夾。", "done");
+      return;
+    }
+    if (removeBtn) {
+      if (!confirm(`確定移除「${source.date}｜${source.process}」這次分析？\n這只會從目前畫面移除，不會影響正式庫存。`)) return;
+      currentSession.records = currentSession.records.filter(record => recordSessionKey(record) !== key);
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, inferSessionLabel(currentSession.records, currentSession.label));
+      currentSession.label = lastAnalysis.date;
+      addAnalysisToSession({ records: [], date: currentSession.label });
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderSessionPanel();
+      renderAnalysis(lastAnalysis);
+      updateProductionStatus("已移除該資料夾分析結果。", "done");
+    }
+  }
+
   function init() {
     if (!$("production")) return;
     const dateInput = $("productionDateInput");
@@ -1342,6 +1377,7 @@
     updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
+    $("productionSessionList")?.addEventListener("click", handleSessionAction);
     $("productionProductResult")?.addEventListener("click", event => {
       if (handleProductSelectAction(event)) return;
       handleProductAliasAction(event);
