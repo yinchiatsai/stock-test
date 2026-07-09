@@ -69,6 +69,42 @@
         </div>
       </div>
 
+      <div class="card defect-adjust-card">
+        <div class="section-title compact-title">
+          <h3>瑕疵作廢扣減</h3>
+          <span class="badge warn">只輸入作廢數量，系統自動扣庫存</span>
+        </div>
+        <div class="form-grid defect-adjust-grid">
+          <div class="field">
+            <label>品項</label>
+            <input id="defectItemSearchInput" placeholder="搜尋品項，例如：手機夾片、名牌" autocomplete="off" />
+            <input id="defectItemSelect" type="hidden" />
+            <div id="defectAutocompleteList" class="autocomplete-list"></div>
+          </div>
+          <div class="field">
+            <label>作廢數量</label>
+            <input id="defectQtyInput" type="number" min="1" step="1" placeholder="例如：10" />
+          </div>
+          <div class="field">
+            <label>原因</label>
+            <select id="defectReasonSelect">
+              <option value="料物瑕疵">料物瑕疵</option>
+              <option value="製程損耗">製程損耗</option>
+              <option value="測試耗材">測試耗材</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>備註</label>
+            <input id="defectNoteInput" placeholder="可不填" />
+          </div>
+          <div class="field defect-submit-field">
+            <label>&nbsp;</label>
+            <button id="defectDeductBtn" type="button" class="danger">確認扣減</button>
+          </div>
+        </div>
+      </div>
+
       <p class="view-hint">大量品項清單模式，一列一個品項。點「庫存」欄位可排序。</p>
       <div id="inventoryGrid"></div>
     </section>
@@ -82,7 +118,7 @@
           <h2>📊 生產分析中心</h2>
           <p class="production-subtitle">選擇資料夾後直接分析；可連續加入多個製程或多天資料夾，系統會保留目前分析進度。</p>
         </div>
-        <span class="badge info production-version-badge">V2.8 品項明細側欄版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V3.2 UX版：只分析，不扣庫存</span>
       </div>
 
       <div class="production-dashboard-grid">
@@ -136,8 +172,8 @@
 
           <div class="production-actions production-actions-primary">
             <button id="productionAnalyzeBtn" type="button">分析所選資料夾</button>
-            <button id="productionNewSessionBtn" class="secondary" type="button">開始新的分析</button>
-            <button id="productionClearBtn" class="secondary" type="button">清空目前畫面</button>
+            <button id="productionNewSessionBtn" class="secondary" type="button">清空並開始新工作</button>
+            <button id="productionClearBtn" class="secondary" type="button">清空畫面</button>
             <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
           </div>
           <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
@@ -166,7 +202,7 @@
       <section class="production-section-card card production-products-section">
         <div class="production-section-title-row">
           <h3>商品使用量</h3>
-          <span class="production-section-hint">分析完成後先看這裡；可用「合併/改名」整理未統一的品項名稱。</span>
+          <span class="production-section-hint">分析完成後先看這裡；可用「整理品項」整理本次分析；若要永久記住，請在右側明細使用「指定商品」。</span>
         </div>
         <div class="production-product-toolbar">
           <input id="productionProductSearchInput" placeholder="搜尋商品使用量，例如：名牌、軍牌、USB" />
@@ -180,18 +216,10 @@
         </div>
       </section>
 
-      <section class="production-section-card card">
-        <div class="production-section-title-row">
-          <h3>分析明細</h3>
-          <span class="production-section-hint">保留原始檔名，方便回查。</span>
-        </div>
-        <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
-      </section>
-
       <section class="production-section-card card production-issues-section">
         <div class="production-section-title-row">
-          <h3>需要處理</h3>
-          <span class="production-section-hint">只顯示真正需要人工確認的項目</span>
+          <h3>待確認事項</h3>
+          <span class="production-section-hint">每個項目都會說明處理後是否仍計入商品</span>
         </div>
         <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
       </section>
@@ -210,6 +238,15 @@
           <div id="productionProcessResult" class="production-table-wrap">尚未分析</div>
         </div>
       </div>
+
+      <section class="production-section-card card">
+        <div class="production-section-title-row">
+          <h3>分析明細</h3>
+          <span class="production-section-hint">保留原始檔名，方便回查。</span>
+        </div>
+        <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
+      </section>
+
     </section>
 
     <!-- 在途商品 -->
