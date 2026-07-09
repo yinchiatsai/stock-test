@@ -957,3 +957,41 @@ body.is-logged-in header{
   border:1px solid var(--line);
   margin-top:8px;
 }
+
+
+/* V3.4：商品編輯內的庫存調整 */
+.stock-adjust-panel {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #dbe6e5;
+  border-radius: 18px;
+  background: #f8fbfa;
+}
+.stock-adjust-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #29484d;
+  margin-bottom: 8px;
+}
+.stock-adjust-title span {
+  color: #6e8589;
+  font-weight: 700;
+}
+.compact-note {
+  margin: 6px 0 14px;
+}
+.compact-adjust-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .compact-adjust-grid {
+    grid-template-columns: 1fr;
+  }
+  .stock-adjust-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
