@@ -131,6 +131,20 @@ function resetDemoData() {
 function getItem(id) {
   return data.items.find(item => item.id === id);
 }
+function gbItemSortName(name) {
+  const value = String(name || "").trim();
+  const match = value.match(/^(.+?)[（(]([^()（）]+)[）)]$/);
+  if (!match) return value;
+  return `${match[1].trim()}｜${match[2].trim()}`;
+}
+
+function gbSortedActiveItems() {
+  return (data.items || [])
+    .filter(item => !item.disabled)
+    .slice()
+    .sort((a, b) => gbItemSortName(a.name).localeCompare(gbItemSortName(b.name), "zh-Hant"));
+}
+
 
 function getIncomingQty(itemId) {
   return data.orders
@@ -1146,7 +1160,7 @@ function editOrder(id) {
   document.getElementById("editOrderSource").value = order.source;
 
   const select = document.getElementById("editOrderItem");
-  select.innerHTML = data.items.map(item =>
+  select.innerHTML = gbSortedActiveItems().map(item =>
     `<option value="${item.id}" ${item.id === order.itemId ? "selected" : ""}>${item.name}</option>`
   ).join("");
 
@@ -11384,3 +11398,61 @@ window.GB_VERSION = "goldenbird-inventory-v3.0.1-firebase-duplicate-fix";
     };
   };
 })();
+
+
+/* GoldenBird Inventory v3.2｜瑕疵作廢扣減 */
+function gbRenderDefectAutocomplete() {
+  const input = document.getElementById("defectItemSearchInput");
+  const hidden = document.getElementById("defectItemSelect");
+  const list = document.getElementById("defectAutocompleteList");
+  if (!input || !hidden || !list || typeof data === "undefined") return;
+  const keyword = String(input.value || "").trim().toLowerCase().replace(/\s+/g, "");
+  hidden.value = "";
+  if (!keyword) { list.innerHTML = ""; return; }
+  const matches = gbSortedActiveItems()
+    .filter(item => String(item.name || "").toLowerCase().replace(/\s+/g, "").includes(keyword))
+    .slice(0, 30);
+  if (!matches.length) {
+    list.innerHTML = `<div class="auto-item auto-empty">沒有符合品項</div>`;
+    return;
+  }
+  list.innerHTML = matches.map(item => `<div class="auto-item" data-id="${item.id}">${escapeHtml(item.name)} <small>目前 ${Number(item.stock)||0}</small></div>`).join("");
+  list.querySelectorAll(".auto-item[data-id]").forEach(el => {
+    el.addEventListener("click", () => {
+      const item = getItem(el.dataset.id);
+      if (!item) return;
+      input.value = item.name;
+      hidden.value = item.id;
+      list.innerHTML = `<div class="auto-selected">已選擇：${escapeHtml(item.name)}｜目前庫存 ${Number(item.stock)||0}</div>`;
+    });
+  });
+}
+
+function gbDeductDefectStock() {
+  const itemId = document.getElementById("defectItemSelect")?.value || "";
+  const qty = Number(document.getElementById("defectQtyInput")?.value || 0);
+  const reason = document.getElementById("defectReasonSelect")?.value || "料物瑕疵";
+  const note = document.getElementById("defectNoteInput")?.value?.trim() || "";
+  const item = getItem(itemId);
+  if (!item) return showToast("請先搜尋並選擇要扣減的品項");
+  if (!Number.isFinite(qty) || qty <= 0) return showToast("請輸入正確作廢數量");
+  const oldStock = Number(item.stock) || 0;
+  const newStock = Math.max(0, oldStock - qty);
+  const msg = `確認將「${item.name}」作廢扣減 ${qty}？\n目前庫存：${oldStock}\n扣減後：${newStock}\n原因：${reason}`;
+  if (!window.confirm(msg)) return;
+  item.stock = newStock;
+  addStockHistory(item, oldStock, newStock, "瑕疵作廢", `${reason}${note ? "｜" + note : ""}`);
+  lastUpdatedItemId = item.id;
+  saveData();
+  renderAll();
+  const ids = ["defectItemSearchInput", "defectItemSelect", "defectQtyInput", "defectNoteInput"];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  const list = document.getElementById("defectAutocompleteList");
+  if (list) list.innerHTML = "";
+  showToast(`${item.name} 已瑕疵作廢扣減 ${qty}`);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("defectItemSearchInput")?.addEventListener("input", gbRenderDefectAutocomplete);
+  document.getElementById("defectDeductBtn")?.addEventListener("click", gbDeductDefectStock);
+});
