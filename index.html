@@ -82,7 +82,7 @@
           <h2>📊 生產分析中心</h2>
           <p class="production-subtitle">選擇資料夾後直接分析；可連續加入多個製程或多天資料夾，系統會保留目前分析進度。</p>
         </div>
-        <span class="badge info production-version-badge">V2.7 智慧學習版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V2.8 品項明細側欄版：只分析，不扣庫存</span>
       </div>
 
       <div class="production-dashboard-grid">
@@ -172,7 +172,12 @@
           <input id="productionProductSearchInput" placeholder="搜尋商品使用量，例如：名牌、軍牌、USB" />
           <span id="productionProductCountHint">尚未分析</span>
         </div>
-        <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
+        <div class="production-product-inspector-layout">
+          <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
+          <aside id="productionProductDetailPanel" class="production-product-detail-panel">
+            <div class="production-side-empty">點選左側商品後，這裡會顯示計入該品項的檔案明細。</div>
+          </aside>
+        </div>
       </section>
 
       <section class="production-section-card card">
