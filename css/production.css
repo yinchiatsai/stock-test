@@ -504,3 +504,111 @@ main:has(#production:not(.hidden)) {
   }
   .production-product-toolbar input { max-width: none; }
 }
+
+/* V2.8 - 商品使用量明細側欄 */
+.production-product-inspector-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
+  gap: 14px;
+  align-items: start;
+}
+.production-product-select-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #25474d;
+  font-weight: 900;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.production-product-select-btn.is-active {
+  color: #b4782b;
+}
+.production-product-detail-panel {
+  border: 1px solid rgba(62, 96, 102, 0.14);
+  border-radius: 18px;
+  background: #f8fbfa;
+  padding: 14px;
+  max-height: 620px;
+  overflow: auto;
+  position: sticky;
+  top: 90px;
+}
+.production-side-empty {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  color: #7b9094;
+  font-weight: 800;
+  text-align: center;
+  border: 1px dashed rgba(62,96,102,.22);
+  border-radius: 14px;
+  padding: 18px;
+  background: #fff;
+}
+.production-side-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.production-side-head h4 {
+  margin: 3px 0 0;
+  color: #25474d;
+  font-size: 18px;
+}
+.production-side-label {
+  color: #7b9094;
+  font-size: 12px;
+  font-weight: 900;
+}
+.production-side-head strong {
+  color: #3e6066;
+  white-space: nowrap;
+}
+.production-side-list {
+  display: grid;
+  gap: 10px;
+}
+.production-side-item {
+  background: #fff;
+  border: 1px solid rgba(62,96,102,.12);
+  border-radius: 14px;
+  padding: 12px;
+}
+.production-side-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #3e6066;
+  margin-bottom: 6px;
+}
+.production-side-item-top span,
+.production-side-meta {
+  color: #7b9094;
+  font-size: 12px;
+  font-weight: 800;
+}
+.production-side-file {
+  color: #294a50;
+  font-weight: 900;
+  word-break: break-all;
+  line-height: 1.45;
+  margin-bottom: 6px;
+}
+.production-side-item .production-record-product-btn {
+  margin-top: 8px;
+}
+@media (max-width: 1100px) {
+  .production-product-inspector-layout {
+    grid-template-columns: 1fr;
+  }
+  .production-product-detail-panel {
+    position: static;
+    max-height: none;
+  }
+}
