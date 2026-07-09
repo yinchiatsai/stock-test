@@ -630,3 +630,17 @@ main:has(#production:not(.hidden)) {
   font-size: 12px;
   font-weight: 800;
 }
+
+
+/* V3.2 UX adjustments */
+.production-session-item{gap:12px;align-items:center;}
+.production-session-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.production-side-item .production-record-product-btn{margin-top:8px;}
+.defect-adjust-card{margin:14px 0 16px;}
+.compact-title{margin-bottom:10px;}
+.defect-adjust-grid{align-items:start;}
+.defect-submit-field{display:flex;flex-direction:column;justify-content:flex-end;}
+@media (max-width: 768px){
+  .production-session-actions{width:100%;justify-content:flex-start;}
+  .defect-adjust-grid{grid-template-columns:1fr;}
+}
