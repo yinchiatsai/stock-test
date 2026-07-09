@@ -44,9 +44,9 @@
   function normalizeTagName(tag) {
     return tag === "補" ? "補件" : tag;
   }
-  const SIDE_WORDS = ["正", "背", "正面", "背面"];
+  const SIDE_WORDS = ["正", "背", "反", "正面", "背面", "反面"];
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
-    side: ["正", "背", "正面", "背面"],
+    side: ["正", "背", "反", "正面", "背面", "反面"],
     printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"],
     insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"],
     faceCount: ["單", "单", "雙", "双", "單面", "双面", "雙面"]
@@ -317,9 +317,12 @@
     IGNORE_PRODUCT_WORDS.forEach(word => {
       value = value.replace(new RegExp(escapeRegExp(word), "g"), "");
     });
-    // 單/雙/正/背/白/彩/內/外等是製作屬性，不應成為商品品名。
+    // 單/雙/正/背/反/白/彩/內/外等是製作屬性；已知顏色/尾端規格也不應成為商品主名。
     value = value.replace(/[（(]([^()（）]+)[）)]/g, (full, inner) => {
-      return normalizeProductionAttribute(inner).attribute ? "" : full;
+      const text = String(inner || "").trim();
+      if (normalizeProductionAttribute(text).attribute) return "";
+      if (isKnownColorText(text)) return "";
+      return full;
     });
     value = value
       .replace(/(單面|雙面|双面)$/g, "")
@@ -336,6 +339,7 @@
     const value = String(attr || "").replace(/\d+$/g, "").trim();
     if (["正", "正面"].includes(value)) return { attribute: "正", family: "side" };
     if (["背", "背面"].includes(value)) return { attribute: "背", family: "side" };
+    if (["反", "反面"].includes(value)) return { attribute: "反", family: "side" };
     if (["白", "白檔", "底白", "底色"].includes(value)) return { attribute: "白", family: "printLayer" };
     if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
     if (["內", "内", "裡", "裡面", "里面"].includes(value)) return { attribute: "內", family: "insideOutside" };
@@ -352,7 +356,7 @@
       const normalized = normalizeProductionAttribute(segment);
       if (normalized.attribute) return normalized;
     }
-    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?)\d*($|[_-])/);
+    const m = text.match(/[_-](正面?|背面?|反面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
     return { attribute: "", family: "" };
   }
@@ -380,6 +384,18 @@
       if (isIgnoredFilenameSegment(seg)) continue;
       if (KNOWN_COLORS.includes(seg)) return seg;
       break;
+    }
+    return "";
+  }
+
+  function detectAnyVariant(baseName) {
+    const text = normalizedBaseName(baseName);
+    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
+    for (const seg of segments) {
+      const cleaned = seg.replace(/[()（）]/g, "").trim();
+      if (KNOWN_COLORS.includes(cleaned)) return cleaned;
+      const m = seg.match(/[（(]([^()（）]+)[）)]/);
+      if (m && KNOWN_COLORS.includes(m[1].trim())) return m[1].trim();
     }
     return "";
   }
@@ -463,7 +479,7 @@
 
     if (variants.length) {
       return variants.map(v => ({
-        item: `${product}(${v.name})`,
+        item: product.includes(`(${v.name})`) ? product : `${product}(${v.name})`,
         variant: v.name,
         quantity: Number(v.quantity || 0),
         unit: parsed.unitHint || "件",
@@ -471,9 +487,10 @@
       }));
     }
 
+    const singleColor = (parsed.colors && parsed.colors.length === 1) ? parsed.colors[0] : "";
     return [{
-      item: product,
-      variant: (parsed.colors && parsed.colors.length === 1) ? parsed.colors[0] : "",
+      item: singleColor && !product.includes(`(${singleColor})`) ? `${product}(${singleColor})` : product,
+      variant: singleColor,
       quantity: qty,
       unit: parsed.unitHint || "件",
       note: "一般扣庫存"
@@ -498,16 +515,17 @@
     const variants = record.variantDetails || [];
     if (variants.length) {
       record.stockDetails = variants.map(v => ({
-        item: `${product}(${v.name})`,
+        item: product.includes(`(${v.name})`) ? product : `${product}(${v.name})`,
         variant: v.name,
         quantity: Number(v.quantity || 0),
         unit: record.unit || "件",
         note: "多色拆扣"
       }));
     } else {
+      const singleColor = (record.colors && record.colors.length === 1) ? record.colors[0] : "";
       record.stockDetails = [{
-        item: product,
-        variant: (record.colors && record.colors.length === 1) ? record.colors[0] : "",
+        item: singleColor && !product.includes(`(${singleColor})`) ? `${product}(${singleColor})` : product,
+        variant: singleColor,
         quantity: qty,
         unit: record.unit || "件",
         note: "一般扣庫存"
@@ -586,10 +604,9 @@
     const process = entry.process || inferProcess(pathParts, actualDate);
     const folderCandidate = pathParts.length > 1 ? folderParseCandidate(pathParts) : null;
     const parsed = folderCandidate ? folderCandidate.parsed : parseFullName(filename);
-    const trailingVariant = detectTrailingVariant(base);
+    const trailingVariant = detectTrailingVariant(base) || detectAnyVariant(base);
     if (trailingVariant && parsed.product && !parsed.colors?.length && !(parsed.variantDetails || []).length) {
       parsed.colors = [trailingVariant];
-      parsed.product = `${parsed.product}(${trailingVariant})`;
       parsed.qtyMode = parsed.qtyMode === "default-1" ? "trailing-variant-default-1" : parsed.qtyMode;
     }
     const detectedAttribute = detectProductionAttribute(base);
@@ -692,12 +709,13 @@
       const attrs = new Set(group.map(r => r.productionAttribute));
       const family = group[0]?.productionAttributeFamily || "";
       const canMerge =
-        (family === "side" && attrs.has("正") && attrs.has("背")) ||
-        (family === "printLayer" && attrs.has("白") && attrs.has("彩")) ||
-        (family === "insideOutside" && attrs.has("內") && attrs.has("外"));
+        (family === "side" && attrs.size >= 2) ||
+        (family === "printLayer" && attrs.size >= 2) ||
+        (family === "insideOutside" && attrs.size >= 2);
 
       if (group.length >= 2 && canMerge) {
-        const reason = family === "side" ? "正/背製作檔合併" : (family === "printLayer" ? "白/彩製作檔合併" : "內/外製作檔合併");
+        const attrList = Array.from(attrs).sort().join("/");
+        const reason = `${attrList}製作檔合併`;
         group.forEach((record, index) => {
           record.mergeReason = reason;
           if (index > 0) {
@@ -715,6 +733,16 @@
     applyProductionAttributeMerge(records);
   }
 
+  function splitStockItemName(item) {
+    const value = String(item || "").trim();
+    const m = value.match(/^(.+)[（(]([^()（）]+)[）)]$/);
+    if (!m) return { base: value, variant: "" };
+    const base = m[1].trim();
+    const variant = m[2].trim();
+    if (KNOWN_COLORS.includes(variant) || /[-－]/.test(variant)) return { base, variant };
+    return { base: value, variant: "" };
+  }
+
   function summarize(records) {
     const product = new Map();
     const source = new Map();
@@ -723,15 +751,23 @@
     const issues = [];
 
     const add = (map, key, qty) => map.set(key, (map.get(key) || 0) + qty);
+    const addProduct = (item, unit, qty) => {
+      const parsed = splitStockItemName(item);
+      const key = `${parsed.base}||${unit || "件"}`;
+      if (!product.has(key)) product.set(key, { name: parsed.base, unit: unit || "件", quantity: 0, variants: new Map() });
+      const row = product.get(key);
+      row.quantity += qty;
+      if (parsed.variant) row.variants.set(parsed.variant, (row.variants.get(parsed.variant) || 0) + qty);
+    };
 
     records.forEach(record => {
       const qty = record.countedQuantity || 0;
       if (qty > 0) {
         const stockDetails = (record.stockDetails || []).filter(d => Number(d.quantity || 0) > 0);
         if (stockDetails.length) {
-          stockDetails.forEach(detail => add(product, `${detail.item}||${detail.unit || record.unit}`, Number(detail.quantity || 0)));
+          stockDetails.forEach(detail => addProduct(detail.item, detail.unit || record.unit, Number(detail.quantity || 0)));
         } else {
-          add(product, `${record.product}||${record.unit}`, qty);
+          addProduct(record.product, record.unit, qty);
         }
         add(source, record.source || "未標示", qty);
         add(process, record.process || "未指定", qty);
@@ -740,10 +776,12 @@
       if (record.issues.length) issues.push(record);
     });
 
-    const productRows = Array.from(product.entries()).map(([key, qty]) => {
-      const [name, unit] = key.split("||");
-      return { name, quantity: qty, unit };
-    }).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "zh-Hant"));
+    const productRows = Array.from(product.values()).map(row => ({
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      variants: Array.from(row.variants.entries()).map(([name, quantity]) => ({ name, quantity })).sort((a,b)=>b.quantity-a.quantity || a.name.localeCompare(b.name,"zh-Hant"))
+    })).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "zh-Hant"));
 
     const mapRows = map => Array.from(map.entries()).map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "zh-Hant"));
 
@@ -894,13 +932,19 @@
   function recordContributesToProduct(record, productName) {
     if (!record || !productName) return false;
     if (record.product === productName) return true;
-    return (record.stockDetails || []).some(d => d.item === productName);
+    return (record.stockDetails || []).some(d => d.item === productName || splitStockItemName(d.item).base === productName);
   }
 
   function productQuantityFromRecord(record, productName) {
-    const details = (record.stockDetails || []).filter(d => d.item === productName);
+    const details = (record.stockDetails || []).filter(d => d.item === productName || splitStockItemName(d.item).base === productName);
     if (details.length) return details.reduce((sum, d) => sum + Number(d.quantity || 0), 0);
     return record.product === productName ? Number(record.countedQuantity || 0) : 0;
+  }
+
+  function productVariantFromRecord(record, productName) {
+    const details = (record.stockDetails || []).filter(d => d.item === productName || splitStockItemName(d.item).base === productName);
+    const vars = details.map(d => d.variant || splitStockItemName(d.item).variant).filter(Boolean);
+    return Array.from(new Set(vars)).join("、");
   }
 
   function renderProductDetailPanel(productName) {
@@ -932,7 +976,7 @@
               <span>${escapeHtml(r.mergeReason || (r.mergedByFolder ? "資料夾優先" : r.productionAttribute || ""))}</span>
             </div>
             <div class="production-side-file">${escapeHtml(r.filename)}</div>
-            <div class="production-side-meta">${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
+            <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
             <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>
           </div>
         `).join("")}
@@ -975,7 +1019,7 @@
     if (productCountHint) productCountHint.textContent = keyword ? `顯示 ${productRows.length} / ${productRowsAll.length} 項` : `共 ${productRowsAll.length} 項`;
     if (selectedProductName && !productRowsAll.some(row => row.name === selectedProductName)) selectedProductName = "";
     renderSimpleTable($("productionProductResult"), productRows, [
-      { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>` },
+      { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}` },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
       { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">合併/改名</button>` }
