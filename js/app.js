@@ -11199,3 +11199,188 @@ window.GB_VERSION = "goldenbird-inventory-v3.0.1-firebase-duplicate-fix";
   };
 })();
 
+
+/* GoldenBird Inventory v3.4.0｜叫貨修改資料一致性與成本防重算修正 */
+(function(){
+  window.GB_VERSION = "goldenbird-inventory-v3.4.0-order-edit-integrity-fix";
+
+  function num(v){
+    const n = Number(String(v ?? "").replace(/[^\d.-]/g,""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  function fmt(v){ return `NT$ ${Math.round(num(v)).toLocaleString("zh-TW")}`; }
+  function byId(id){ return document.getElementById(id); }
+  function currentOrder(){
+    const id = byId("editOrderId")?.value || "";
+    return (data.orders || []).find(o => o.id === id) || null;
+  }
+  function getItemName(order){
+    const item = typeof getItem === "function" ? getItem(order?.itemId) : (data.items || []).find(i => i.id === order?.itemId);
+    return item?.name || order?.deletedItemName || order?.itemName || "已刪除品項";
+  }
+  function rateDefault(order){
+    return num(order?.fxRate) || 4.728132;
+  }
+  function unitOriginal(order){
+    if(order?.unitCostOriginal !== undefined) return num(order.unitCostOriginal);
+    if(order?.originalCost !== undefined && order?.costMode === "unit_price_times_qty_plus_freight") return num(order.originalCost);
+    if(order?.productUnitCost !== undefined && (order.currency || "TWD") === "TWD") return num(order.productUnitCost);
+    if(order?.cost !== undefined && num(order.qty) > 0 && (order.currency || "TWD") === "TWD") return +(num(order.cost) / Math.max(1,num(order.qty))).toFixed(4);
+    return num(order?.cost);
+  }
+  function freightOriginal(order){
+    if(order?.originalFreight !== undefined) return num(order.originalFreight);
+    if((order?.currency || "TWD") === "CNY" && order?.freight !== undefined){
+      const r = rateDefault(order);
+      return r ? +(num(order.freight)/r).toFixed(4) : 0;
+    }
+    return num(order?.freight);
+  }
+  function ensureEditOrderFields(){
+    const modal = byId("editOrderModal");
+    const costInput = byId("editOrderCost");
+    if(!modal || !costInput) return;
+
+    const costLabel = costInput.closest(".field")?.querySelector("label");
+    if(costLabel) costLabel.textContent = "商品單價";
+
+    if(!byId("editOrderFreight")){
+      costInput.closest(".field")?.insertAdjacentHTML("afterend", `
+        <div class="field gb-edit-order-extra"><label>運費</label><input id="editOrderFreight" type="number" min="0" step="0.0001" /></div>
+        <div class="field gb-edit-order-extra"><label>幣別</label><select id="editOrderCurrency"><option value="TWD">台幣 TWD</option><option value="CNY">人民幣 CNY</option></select></div>
+        <div class="field gb-edit-order-extra"><label>匯率</label><input id="editOrderFxRate" type="number" min="0" step="0.000001" /></div>
+        <div id="editOrderCostPreview" class="gb-edit-order-cost-preview"></div>
+      `);
+    }
+
+    if(!byId("gbV340OrderEditCss")){
+      const style = document.createElement("style");
+      style.id = "gbV340OrderEditCss";
+      style.textContent = `
+        .gb-edit-order-cost-preview{margin:10px 0;padding:12px 14px;border-radius:14px;background:#f7f1e6;color:#6b7c80;font-weight:900;line-height:1.6;}
+        .gb-edit-order-warning{font-size:13px;color:#9f6a2b;margin-top:4px;font-weight:800;}
+      `;
+      document.head.appendChild(style);
+    }
+  }
+  function calcEditOrder(){
+    const order = currentOrder();
+    const qty = num(byId("editOrderQty")?.value);
+    const unit = num(byId("editOrderCost")?.value);
+    const freight = num(byId("editOrderFreight")?.value);
+    const currency = byId("editOrderCurrency")?.value || order?.currency || "TWD";
+    const rate = currency === "CNY" ? (num(byId("editOrderFxRate")?.value) || rateDefault(order)) : 1;
+    const productOriginal = unit * qty;
+    const totalOriginal = productOriginal + freight;
+    return {
+      order, qty, unit, freight, currency, rate,
+      productOriginal, totalOriginal,
+      productTwd: Math.round(productOriginal * rate),
+      freightTwd: Math.round(freight * rate),
+      totalTwd: Math.round(totalOriginal * rate)
+    };
+  }
+  function updatePreview(){
+    const preview = byId("editOrderCostPreview");
+    if(!preview) return;
+    const c = calcEditOrder();
+    if(c.currency === "CNY"){
+      preview.innerHTML = `預估總成本：${fmt(c.totalTwd)}（CNY ${c.unit} × ${c.qty} + 運 ${c.freight}｜匯率 ${c.rate}）`;
+    }else{
+      preview.innerHTML = `預估總成本：${fmt(c.totalTwd)}（單價 ${c.unit} × ${c.qty} + 運費 ${c.freight}）`;
+    }
+  }
+  function populateEditOrderExtra(){
+    ensureEditOrderFields();
+    const order = currentOrder();
+    if(!order) return;
+    if(byId("editOrderCost")) byId("editOrderCost").value = unitOriginal(order);
+    if(byId("editOrderFreight")) byId("editOrderFreight").value = freightOriginal(order);
+    if(byId("editOrderCurrency")) byId("editOrderCurrency").value = order.currency || "TWD";
+    if(byId("editOrderFxRate")) byId("editOrderFxRate").value = order.currency === "CNY" ? rateDefault(order) : 1;
+    updatePreview();
+  }
+  function bindEditInputs(){
+    ["editOrderQty","editOrderCost","editOrderFreight","editOrderCurrency","editOrderFxRate"].forEach(id=>{
+      const el = byId(id);
+      if(el && el.dataset.gbV340Bound !== "true"){
+        el.addEventListener("input", updatePreview);
+        el.addEventListener("change", updatePreview);
+        el.dataset.gbV340Bound = "true";
+      }
+    });
+  }
+  function saveEditOrderIntegrity(){
+    const c = calcEditOrder();
+    const order = c.order;
+    if(!order) return false;
+
+    const received = num(byId("editOrderReceived")?.value);
+    const itemId = byId("editOrderItem")?.value || order.itemId;
+    const source = (byId("editOrderSource")?.value || "").trim() || "-";
+
+    if(!c.qty || c.qty < 0) return alert("叫貨數量不正確"), true;
+    if(received < 0 || received > c.qty) return alert("已到貨數量不正確"), true;
+    if(c.unit < 0 || c.freight < 0) return alert("成本或運費不正確"), true;
+
+    order.itemId = itemId;
+    order.deletedItemName = "";
+    order.qty = c.qty;
+    order.received = received;
+    order.source = source;
+    order.currency = c.currency;
+    order.fxRate = c.rate;
+    order.unitCostOriginal = c.unit;
+    order.originalCost = c.unit;
+    order.originalProductSubtotal = c.productOriginal;
+    order.originalFreight = c.freight;
+    order.originalTotal = c.totalOriginal;
+    order.productUnitCost = Math.round(c.unit * c.rate);
+    order.productCost = c.productTwd;
+    order.freight = c.freightTwd;
+    order.cost = c.totalTwd;
+    order.costMode = "unit_price_times_qty_plus_freight";
+    order.updatedAt = Date.now();
+    if(typeof updateOrderStatus === "function") updateOrderStatus(order);
+    else order.status = received <= 0 ? "在途" : (received < c.qty ? "部分到貨" : "已到貨");
+
+    if(typeof saveData === "function") saveData();
+    if(typeof closeModal === "function") closeModal("editOrderModal");
+    if(typeof renderAll === "function") renderAll();
+    if(typeof showToast === "function") showToast(`叫貨紀錄已修改：${getItemName(order)}`);
+    return true;
+  }
+
+  const oldEditOrder = typeof editOrder === "function" ? editOrder : null;
+  if(oldEditOrder){
+    editOrder = function(id){
+      oldEditOrder(id);
+      setTimeout(()=>{ populateEditOrderExtra(); bindEditInputs(); }, 0);
+      setTimeout(()=>{ populateEditOrderExtra(); bindEditInputs(); }, 120);
+    };
+  }
+
+  document.addEventListener("click", function(event){
+    const target = event.target;
+    if(target && target.id === "saveEditOrderBtn"){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveEditOrderIntegrity();
+    }
+  }, true);
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(()=>{ ensureEditOrderFields(); bindEditInputs(); },500);
+  });
+
+  window.gbOrderEditIntegrityCheck = function(){
+    return {
+      version: window.GB_VERSION,
+      editFieldsReady: !!byId("editOrderFreight") && !!byId("editOrderCurrency") && !!byId("editOrderFxRate"),
+      orderCount: (data.orders || []).length,
+      sample: (data.orders || []).slice(0,3).map(o=>({
+        item:getItemName(o), qty:o.qty, unit:o.unitCostOriginal ?? o.originalCost, freight:o.originalFreight, currency:o.currency, rate:o.fxRate, cost:o.cost
+      }))
+    };
+  };
+})();
