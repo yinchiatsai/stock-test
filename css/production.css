@@ -612,3 +612,21 @@ main:has(#production:not(.hidden)) {
     max-height: none;
   }
 }
+
+.production-variant-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.production-variant-list span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(62,96,102,.14);
+  background: rgba(62,96,102,.06);
+  color: #48666b;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
