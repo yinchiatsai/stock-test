@@ -48,10 +48,11 @@
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
     side: ["正", "背", "正面", "背面"],
     printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"],
-    insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"]
+    insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"],
+    faceCount: ["單", "单", "雙", "双", "單面", "双面", "雙面"]
   };
   const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
-  const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "金", "銀", "黑", "白", "紅", "藍", "綠"];
+  const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "大", "小", "金", "銀", "黑", "白", "紅", "藍", "綠", "紫", "粉", "灰"];
   const IGNORE_PRODUCT_WORDS = ["刻白", "刻黑", "雕白", "雕黑", "雷雕", "彩印", "白墨", "底白"];
   const DESIGNER_CODE_RE = /^\d+[A-Z]{2,4}$/i;
 
@@ -60,6 +61,7 @@
   let lastAnalysisOptions = null;
   let currentSession = createEmptySession();
   let productSearchTerm = "";
+  let selectedProductName = "";
 
   function createEmptySession() {
     return {
@@ -315,6 +317,14 @@
     IGNORE_PRODUCT_WORDS.forEach(word => {
       value = value.replace(new RegExp(escapeRegExp(word), "g"), "");
     });
+    // 單/雙/正/背/白/彩/內/外等是製作屬性，不應成為商品品名。
+    value = value.replace(/[（(]([^()（）]+)[）)]/g, (full, inner) => {
+      return normalizeProductionAttribute(inner).attribute ? "" : full;
+    });
+    value = value
+      .replace(/(單面|雙面|双面)$/g, "")
+      .replace(/[，,、]+$/g, "")
+      .trim();
     return value.trim();
   }
 
@@ -330,6 +340,8 @@
     if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
     if (["內", "内", "裡", "裡面", "里面"].includes(value)) return { attribute: "內", family: "insideOutside" };
     if (["外", "外面"].includes(value)) return { attribute: "外", family: "insideOutside" };
+    if (["單", "单", "單面"].includes(value)) return { attribute: "單", family: "faceCount" };
+    if (["雙", "双", "雙面", "双面"].includes(value)) return { attribute: "雙", family: "faceCount" };
     return { attribute: "", family: "" };
   }
 
@@ -340,7 +352,7 @@
       const normalized = normalizeProductionAttribute(segment);
       if (normalized.attribute) return normalized;
     }
-    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面)\d*($|[_-])/);
+    const m = text.match(/[_-](正面?|背面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
     return { attribute: "", family: "" };
   }
@@ -348,6 +360,28 @@
   function detectSide(baseName) {
     const detected = detectProductionAttribute(baseName);
     return detected.family === "side" ? detected.attribute : "";
+  }
+
+  function isIgnoredFilenameSegment(segment) {
+    const value = String(segment || "").trim();
+    if (!value) return true;
+    if (DESIGNER_CODE_RE.test(value)) return true;
+    if (normalizeProductionAttribute(value).attribute) return true;
+    if (/^\d+[A-Z]{2,4}$/i.test(value)) return true;
+    return false;
+  }
+
+  function detectTrailingVariant(baseName) {
+    const text = normalizedBaseName(baseName);
+    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
+    if (segments.length < 2) return "";
+    for (let i = segments.length - 1; i >= 1; i--) {
+      const seg = segments[i];
+      if (isIgnoredFilenameSegment(seg)) continue;
+      if (KNOWN_COLORS.includes(seg)) return seg;
+      break;
+    }
+    return "";
   }
 
   function removeProductionAttributesForIdentity(baseName) {
@@ -552,6 +586,12 @@
     const process = entry.process || inferProcess(pathParts, actualDate);
     const folderCandidate = pathParts.length > 1 ? folderParseCandidate(pathParts) : null;
     const parsed = folderCandidate ? folderCandidate.parsed : parseFullName(filename);
+    const trailingVariant = detectTrailingVariant(base);
+    if (trailingVariant && parsed.product && !parsed.colors?.length && !(parsed.variantDetails || []).length) {
+      parsed.colors = [trailingVariant];
+      parsed.product = `${parsed.product}(${trailingVariant})`;
+      parsed.qtyMode = parsed.qtyMode === "default-1" ? "trailing-variant-default-1" : parsed.qtyMode;
+    }
     const detectedAttribute = detectProductionAttribute(base);
     const side = detectedAttribute.family === "side" ? detectedAttribute.attribute : "";
     const identity = removeProductionAttributesForIdentity(base);
@@ -687,7 +727,12 @@
     records.forEach(record => {
       const qty = record.countedQuantity || 0;
       if (qty > 0) {
-        add(product, `${record.product}||${record.unit}`, qty);
+        const stockDetails = (record.stockDetails || []).filter(d => Number(d.quantity || 0) > 0);
+        if (stockDetails.length) {
+          stockDetails.forEach(detail => add(product, `${detail.item}||${detail.unit || record.unit}`, Number(detail.quantity || 0)));
+        } else {
+          add(product, `${record.product}||${record.unit}`, qty);
+        }
         add(source, record.source || "未標示", qty);
         add(process, record.process || "未指定", qty);
         if (record.tags.length) record.tags.forEach(t => add(tag, t, qty));
@@ -846,6 +891,54 @@
     }).join("")}</tr>`).join("")}</tbody></table>`;
   }
 
+  function recordContributesToProduct(record, productName) {
+    if (!record || !productName) return false;
+    if (record.product === productName) return true;
+    return (record.stockDetails || []).some(d => d.item === productName);
+  }
+
+  function productQuantityFromRecord(record, productName) {
+    const details = (record.stockDetails || []).filter(d => d.item === productName);
+    if (details.length) return details.reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+    return record.product === productName ? Number(record.countedQuantity || 0) : 0;
+  }
+
+  function renderProductDetailPanel(productName) {
+    const el = $("productionProductDetailPanel");
+    if (!el) return;
+    if (!lastAnalysis || !productName) {
+      el.innerHTML = `<div class="production-side-empty">點選左側商品後，這裡會顯示計入該品項的檔案明細。</div>`;
+      return;
+    }
+    const rows = lastAnalysis.records.filter(record => recordContributesToProduct(record, productName));
+    if (!rows.length) {
+      el.innerHTML = `<div class="production-side-empty">目前沒有找到「${escapeHtml(productName)}」的來源明細。</div>`;
+      return;
+    }
+    const total = rows.reduce((sum, r) => sum + productQuantityFromRecord(r, productName), 0);
+    el.innerHTML = `
+      <div class="production-side-head">
+        <div>
+          <div class="production-side-label">目前選取商品</div>
+          <h4>${escapeHtml(productName)}</h4>
+        </div>
+        <strong>${escapeHtml(total)} 件</strong>
+      </div>
+      <div class="production-side-list">
+        ${rows.map(r => `
+          <div class="production-side-item">
+            <div class="production-side-item-top">
+              <strong>${escapeHtml(productQuantityFromRecord(r, productName))} 件</strong>
+              <span>${escapeHtml(r.mergeReason || (r.mergedByFolder ? "資料夾優先" : r.productionAttribute || ""))}</span>
+            </div>
+            <div class="production-side-file">${escapeHtml(r.filename)}</div>
+            <div class="production-side-meta">${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
+            <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>
+          </div>
+        `).join("")}
+      </div>`;
+  }
+
   function reviewSuggestion(record) {
     const issueText = (record.issues || []).join("；");
     if (/舊式尾端數量/.test(issueText)) return "已可計算；可按『忽略提醒』，或之後改成 (x數量)";
@@ -880,12 +973,14 @@
     const productRows = keyword ? productRowsAll.filter(row => String(row.name || "").toLowerCase().includes(keyword)) : productRowsAll;
     const productCountHint = $("productionProductCountHint");
     if (productCountHint) productCountHint.textContent = keyword ? `顯示 ${productRows.length} / ${productRowsAll.length} 項` : `共 ${productRowsAll.length} 項`;
+    if (selectedProductName && !productRowsAll.some(row => row.name === selectedProductName)) selectedProductName = "";
     renderSimpleTable($("productionProductResult"), productRows, [
-      { label: "商品", key: "name" },
+      { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>` },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
       { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">合併/改名</button>` }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
+    renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
       { label: "平台", key: "name" },
       { label: "數量", key: "quantity", num: true }
@@ -1053,6 +1148,15 @@
     renderAnalysis(lastAnalysis);
   }
 
+  function handleProductSelectAction(event) {
+    const btn = event.target.closest(".production-product-select-btn");
+    if (!btn) return false;
+    selectedProductName = btn.dataset.product || "";
+    renderProductDetailPanel(selectedProductName);
+    document.querySelectorAll(".production-product-select-btn").forEach(b => b.classList.toggle("is-active", b.dataset.product === selectedProductName));
+    return true;
+  }
+
   function handleProductAliasAction(event) {
     const btn = event.target.closest(".production-alias-btn");
     if (!btn) return;
@@ -1188,7 +1292,11 @@
     updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
-    $("productionProductResult")?.addEventListener("click", handleProductAliasAction);
+    $("productionProductResult")?.addEventListener("click", event => {
+      if (handleProductSelectAction(event)) return;
+      handleProductAliasAction(event);
+    });
+    $("productionProductDetailPanel")?.addEventListener("click", handleRecordProductAction);
     $("productionDetailResult")?.addEventListener("click", handleRecordProductAction);
     $("productionProductSearchInput")?.addEventListener("input", event => {
       productSearchTerm = event.target.value || "";
