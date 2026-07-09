@@ -69,42 +69,6 @@
         </div>
       </div>
 
-      <div class="card defect-adjust-card">
-        <div class="section-title compact-title">
-          <h3>瑕疵作廢扣減</h3>
-          <span class="badge warn">只輸入作廢數量，系統自動扣庫存</span>
-        </div>
-        <div class="form-grid defect-adjust-grid">
-          <div class="field">
-            <label>品項</label>
-            <input id="defectItemSearchInput" placeholder="搜尋品項，例如：手機夾片、名牌" autocomplete="off" />
-            <input id="defectItemSelect" type="hidden" />
-            <div id="defectAutocompleteList" class="autocomplete-list"></div>
-          </div>
-          <div class="field">
-            <label>作廢數量</label>
-            <input id="defectQtyInput" type="number" min="1" step="1" placeholder="例如：10" />
-          </div>
-          <div class="field">
-            <label>原因</label>
-            <select id="defectReasonSelect">
-              <option value="料物瑕疵">料物瑕疵</option>
-              <option value="製程損耗">製程損耗</option>
-              <option value="測試耗材">測試耗材</option>
-              <option value="其他">其他</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>備註</label>
-            <input id="defectNoteInput" placeholder="可不填" />
-          </div>
-          <div class="field defect-submit-field">
-            <label>&nbsp;</label>
-            <button id="defectDeductBtn" type="button" class="danger">確認扣減</button>
-          </div>
-        </div>
-      </div>
-
       <p class="view-hint">大量品項清單模式，一列一個品項。點「庫存」欄位可排序。</p>
       <div id="inventoryGrid"></div>
     </section>
@@ -631,6 +595,39 @@
       <div class="field"><label>管理部門</label><input id="editItemDeptInput" placeholder="例如：金屬 / 彩印" /></div>
       <div class="field"><label>安全庫存</label><input id="editItemSafetyInput" type="number" min="0" /></div>
       <div class="field check-field"><input id="editItemSharedInput" type="checkbox" /><label for="editItemSharedInput">共用庫存</label></div>
+
+      <div class="stock-adjust-panel">
+        <div class="stock-adjust-title">
+          <strong>庫存調整</strong>
+          <span id="editItemCurrentStockText">目前庫存：-</span>
+        </div>
+        <p class="note compact-note">此區可直接輸入數量，系統會自動加減庫存並留下異動紀錄；不需要自己先計算新庫存。</p>
+        <div class="form-grid compact-adjust-grid">
+          <div class="field">
+            <label>調整類型</label>
+            <select id="editItemAdjustType">
+              <option value="none">不調整庫存</option>
+              <option value="deduct">扣減庫存</option>
+              <option value="add">增加庫存</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>調整數量</label>
+            <input id="editItemAdjustQty" type="number" min="1" step="1" placeholder="例如：10" />
+          </div>
+          <div class="field">
+            <label>原因</label>
+            <select id="editItemAdjustReason">
+              <option value="料物瑕疵">料物瑕疵</option>
+              <option value="製程損耗">製程損耗</option>
+              <option value="測試耗材">測試耗材</option>
+              <option value="盤點修正">盤點修正</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div class="field"><label>備註</label><input id="editItemNoteInput" /></div>
       <div class="modal-actions">
         <button class="secondary" id="closeEditItemBtn">取消</button>
