@@ -1215,6 +1215,15 @@ function editItem(id) {
   document.getElementById("editItemNoteInput").value = item.note || "";
   document.getElementById("editItemSharedInput").checked = item.mode === "共用型";
 
+  const stockText = document.getElementById("editItemCurrentStockText");
+  if (stockText) stockText.textContent = `目前庫存：${Number(item.stock) || 0}`;
+  const adjustType = document.getElementById("editItemAdjustType");
+  const adjustQty = document.getElementById("editItemAdjustQty");
+  const adjustReason = document.getElementById("editItemAdjustReason");
+  if (adjustType) adjustType.value = "none";
+  if (adjustQty) adjustQty.value = "";
+  if (adjustReason) adjustReason.value = "料物瑕疵";
+
   openModal("editItemModal");
 }
 
@@ -1229,9 +1238,16 @@ function saveEditItem() {
   const safety = Number(document.getElementById("editItemSafetyInput").value);
   const note = document.getElementById("editItemNoteInput").value.trim();
   const shared = document.getElementById("editItemSharedInput").checked;
+  const adjustType = document.getElementById("editItemAdjustType")?.value || "none";
+  const adjustQtyRaw = document.getElementById("editItemAdjustQty")?.value || "";
+  const adjustQty = Number(adjustQtyRaw);
+  const adjustReason = document.getElementById("editItemAdjustReason")?.value || "料物瑕疵";
 
   if (!name) return showToast("請輸入品項名稱");
   if (Number.isNaN(safety) || safety < 0) return showToast("安全庫存不正確");
+  if (adjustType !== "none" && (!Number.isFinite(adjustQty) || adjustQty <= 0)) {
+    return showToast("請輸入正確的庫存調整數量");
+  }
 
   item.name = name;
   item.category = category;
@@ -1240,10 +1256,23 @@ function saveEditItem() {
   item.note = note;
   item.mode = shared ? "共用型" : "觀察型";
 
+  if (adjustType !== "none") {
+    const oldStock = Number(item.stock) || 0;
+    const newStock = adjustType === "deduct"
+      ? Math.max(0, oldStock - adjustQty)
+      : oldStock + adjustQty;
+    const actionLabel = adjustType === "deduct" ? "扣減庫存" : "增加庫存";
+    const confirmText = `確認${actionLabel}？\n品項：${item.name}\n數量：${adjustQty}\n目前庫存：${oldStock}\n調整後：${newStock}\n原因：${adjustReason}`;
+    if (!window.confirm(confirmText)) return;
+    item.stock = newStock;
+    addStockHistory(item, oldStock, newStock, actionLabel, adjustReason);
+    lastUpdatedItemId = item.id;
+  }
+
   saveData();
   closeModal("editItemModal");
   renderAll();
-  showToast("品項資料已修改");
+  showToast(adjustType === "none" ? "品項資料已修改" : "品項資料與庫存已更新");
 }
 
 function toggleItemDisabled(id) {
