@@ -47,13 +47,14 @@
   const SIDE_WORDS = ["正", "背", "反", "正面", "背面", "反面"];
   const PRODUCTION_ATTRIBUTE_FAMILIES = {
     side: ["正", "背", "反", "正面", "背面", "反面"],
-    printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色"],
+    printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色", "鏡彩", "正彩"],
     insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"],
-    faceCount: ["單", "单", "雙", "双", "單面", "双面", "雙面"]
+    faceCount: ["單", "单", "雙", "双", "單面", "双面", "雙面"],
+    engraving: ["有刻", "沒刻", "无刻", "不刻", "刻白", "刻黑"]
   };
   const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
   const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "大", "小", "金", "銀", "黑", "白", "紅", "藍", "綠", "紫", "粉", "灰"];
-  const IGNORE_PRODUCT_WORDS = ["刻白", "刻黑", "雕白", "雕黑", "雷雕", "彩印", "白墨", "底白"];
+  const IGNORE_PRODUCT_WORDS = ["刻白", "刻黑", "雕白", "雕黑", "雷雕", "彩印", "白墨", "底白", "有刻", "沒刻", "无刻", "不刻", "鏡彩", "正彩"];
   const DESIGNER_CODE_RE = /^\d+[A-Z]{2,4}$/i;
 
   let lastAnalysis = null;
@@ -342,10 +343,14 @@
     if (["反", "反面"].includes(value)) return { attribute: "反", family: "side" };
     if (["白", "白檔", "底白", "底色"].includes(value)) return { attribute: "白", family: "printLayer" };
     if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
+    if (["鏡彩"].includes(value)) return { attribute: "鏡彩", family: "printLayer" };
+    if (["正彩"].includes(value)) return { attribute: "正彩", family: "printLayer" };
     if (["內", "内", "裡", "裡面", "里面"].includes(value)) return { attribute: "內", family: "insideOutside" };
     if (["外", "外面"].includes(value)) return { attribute: "外", family: "insideOutside" };
     if (["單", "单", "單面"].includes(value)) return { attribute: "單", family: "faceCount" };
     if (["雙", "双", "雙面", "双面"].includes(value)) return { attribute: "雙", family: "faceCount" };
+    if (["有刻"].includes(value)) return { attribute: "有刻", family: "engraving" };
+    if (["沒刻", "无刻", "不刻"].includes(value)) return { attribute: "沒刻", family: "engraving" };
     return { attribute: "", family: "" };
   }
 
@@ -356,7 +361,7 @@
       const normalized = normalizeProductionAttribute(segment);
       if (normalized.attribute) return normalized;
     }
-    const m = text.match(/[_-](正面?|背面?|反面?|白檔?|彩檔?|底白|底色|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?)\d*($|[_-])/);
+    const m = text.match(/[_-](正面?|背面?|反面?|白檔?|彩檔?|底白|底色|鏡彩|正彩|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?|有刻|沒刻|无刻|不刻)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
     return { attribute: "", family: "" };
   }
@@ -711,7 +716,8 @@
       const canMerge =
         (family === "side" && attrs.size >= 2) ||
         (family === "printLayer" && attrs.size >= 2) ||
-        (family === "insideOutside" && attrs.size >= 2);
+        (family === "insideOutside" && attrs.size >= 2) ||
+        (family === "engraving" && attrs.size >= 2);
 
       if (group.length >= 2 && canMerge) {
         const attrList = Array.from(attrs).sort().join("/");
