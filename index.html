@@ -563,8 +563,6 @@
             <option value="報廢調整">報廢調整</option>
             <option value="測試耗材">測試耗材</option>
             <option value="遺失">遺失</option>
-            <option value="叫貨到貨">叫貨到貨</option>
-            <option value="盤點補入">盤點補入</option>
             <option value="其他調整">其他調整</option>
           </select>
         </div>
@@ -668,6 +666,34 @@
       <div class="modal-actions">
         <button class="secondary" id="closeEditItemBtn">取消</button>
         <button id="saveEditItemBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="productionProductPickerModal" class="modal-mask">
+    <div class="modal-box production-picker-modal-box">
+      <h3>指定庫存商品</h3>
+      <p class="note compact-note" id="productionProductPickerTitle">請選擇正式庫存品項。若一個檔案包含兩個顏色，請分別加入兩個品項。</p>
+      <div class="form-grid compact-adjust-grid">
+        <div class="field">
+          <label>庫存品項</label>
+          <select id="productionProductPickerSelect"></select>
+        </div>
+        <div class="field">
+          <label>數量</label>
+          <input id="productionProductPickerQty" type="number" min="1" step="1" value="1" />
+        </div>
+      </div>
+      <button type="button" class="secondary" id="productionProductPickerAddBtn">加入指定品項</button>
+      <div id="productionProductPickerList" class="production-picker-list"></div>
+      <label class="check-field production-picker-check">
+        <input type="checkbox" id="productionProductPickerPermanent" checked />
+        <span>永久記住此解析名稱的指定方式</span>
+      </label>
+      <div class="modal-actions">
+        <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
+        <button id="productionProductPickerSaveBtn" type="button">套用指定</button>
       </div>
     </div>
   </div>
