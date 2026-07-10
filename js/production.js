@@ -906,15 +906,16 @@
 
   function addAnalysisToSession(analysis) {
     const incomingKeys = new Set(analysis.records.map(recordSessionKey));
-    const incomingSignatures = new Set(analysis.records.map(r => `${r.date || "無日期"}|${r.sourceSignature || r.filename}`));
+    const incomingFileFingerprints = new Set(analysis.records.map(r => `${r.date || "無日期"}|${r.sourceSignature || r.filename}`));
     const incomingNames = new Set(analysis.records.map(r => `${r.date || "無日期"}|${r.filename}`));
-    // 同一日期＋同一製程重新分析時，預設覆蓋原本那組，避免重複累加。
-    // 若第一次未填製程、第二次補上製程，同一日期＋同一批檔名也會覆蓋，避免同一資料夾被算兩次。
+    const incomingHasNamedProcess = analysis.records.some(r => r.process && r.process !== "未指定");
+    // 不同製程 / 不同資料夾要累加到目前工作階段。
+    // 只有「同一日期＋同一製程」重新分析，或同一批檔案由未指定補上製程時，才覆蓋舊資料。
     currentSession.records = currentSession.records.filter(r => {
       const keyHit = incomingKeys.has(recordSessionKey(r));
-      const signatureHit = incomingSignatures.has(`${r.date || "無日期"}|${r.sourceSignature || r.filename}`);
-      const sameFilenameHit = incomingNames.has(`${r.date || "無日期"}|${r.filename}`) && (r.process === "未指定" || analysis.records.some(n => n.process !== r.process));
-      return !(keyHit || signatureHit || sameFilenameHit);
+      const sameFileHit = incomingFileFingerprints.has(`${r.date || "無日期"}|${r.sourceSignature || r.filename}`);
+      const unnamedSameFileHit = incomingNames.has(`${r.date || "無日期"}|${r.filename}`) && r.process === "未指定" && incomingHasNamedProcess;
+      return !(keyHit || sameFileHit || unnamedSameFileHit);
     });
     currentSession.records.push(...analysis.records);
     currentSession.label = inferSessionLabel(currentSession.records, analysis.date);
@@ -1305,13 +1306,19 @@
     return currentSession.records.find(r => path && r.path === path) || currentSession.records.find(r => r.filename === file);
   }
 
-  function renderProductionPickerOptions() {
+  function renderProductionPickerOptions(filterText = "") {
     const select = $("productionProductPickerSelect");
     if (!select) return;
-    const options = getInventoryProductOptions();
+    const keyword = String(filterText || "").trim().toLowerCase();
+    const allOptions = getInventoryProductOptions();
+    let options = allOptions;
+    if (keyword) {
+      options = allOptions.filter(name => String(name).toLowerCase().includes(keyword));
+    }
+    options = options.slice(0, 80);
     select.innerHTML = options.length
       ? options.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
-      : `<option value="">目前讀不到庫存品項清單</option>`;
+      : `<option value="">${keyword ? "找不到符合的庫存品項" : "請先輸入關鍵字搜尋庫存品項"}</option>`;
   }
 
   function renderProductionPickerList() {
@@ -1332,18 +1339,21 @@
 
   function openProductionProductPicker(record) {
     if (!record) return;
-    renderProductionPickerOptions();
+    const searchInput = $("productionProductPickerSearch");
+    if (searchInput) searchInput.value = "";
+    renderProductionPickerOptions("");
     const key = record.path || record.filename;
+    const hasManualDetails = (record.stockDetails || []).some(d => /人工指定|永久指定|本次指定/.test(d.note || record.manualNote || ""));
     productionPickerState = {
       recordKey: key,
       originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
-      details: (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
+      details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
         quantity: Number(d.quantity || record.countedQuantity || 1),
         unit: d.unit || record.unit || "件",
         variant: d.variant || "",
         note: "人工指定"
-      }))
+      })) : []
     };
     const title = $("productionProductPickerTitle");
     if (title) title.textContent = record.filename || record.product || "指定商品";
@@ -1497,10 +1507,13 @@
     });
     $("productionProductDetailPanel")?.addEventListener("click", handleRecordProductAction);
     $("productionDetailResult")?.addEventListener("click", handleRecordProductAction);
+    $("productionProductPickerSearch")?.addEventListener("input", event => {
+      renderProductionPickerOptions(event.target.value || "");
+    });
     $("productionProductPickerAddBtn")?.addEventListener("click", () => {
       const itemName = $("productionProductPickerSelect")?.value || "";
       const qty = Number($("productionProductPickerQty")?.value || 1);
-      if (!itemName) return alert("請先選擇庫存品項。");
+      if (!itemName || itemName.includes("找不到") || itemName.includes("請先")) return alert("請先搜尋並選擇正式庫存品項。");
       if (!Number.isFinite(qty) || qty <= 0) return alert("請輸入正確數量。");
       productionPickerState.details.push({ item: itemName, quantity: qty, unit: "件", note: "人工指定" });
       renderProductionPickerList();
