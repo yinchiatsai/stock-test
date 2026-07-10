@@ -644,3 +644,13 @@ main:has(#production:not(.hidden)) {
   .production-session-actions{width:100%;justify-content:flex-start;}
   .defect-adjust-grid{grid-template-columns:1fr;}
 }
+
+
+/* V3.9 指定庫存商品 */
+.production-picker-modal-box { max-width: 720px; }
+.production-picker-list { margin-top: 14px; display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.production-picker-empty { color: #7b8d8f; background: #f7f4ea; border-radius: 14px; padding: 12px 14px; font-weight: 700; }
+.production-picker-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #dfe8e6; border-radius: 14px; background: #fff; }
+.production-picker-row span { font-weight: 800; color: #24474c; }
+.production-picker-check { margin-top: 14px; }
+@media (max-width: 720px) { .production-picker-row { grid-template-columns: 1fr; } }
