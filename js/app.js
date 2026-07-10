@@ -144,6 +144,7 @@ function gbSortedActiveItems() {
     .slice()
     .sort((a, b) => gbItemSortName(a.name).localeCompare(gbItemSortName(b.name), "zh-Hant"));
 }
+window.gbSortedActiveItems = gbSortedActiveItems;
 
 
 function getIncomingQty(itemId) {
