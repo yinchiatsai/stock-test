@@ -621,17 +621,23 @@
 
   function applyManualItem(record) {
     const manual = runtimeRules.manualItems?.[record.path] || runtimeRules.manualItems?.[record.filename];
-    if (!manual) return record;
-    if (manual.product) {
-      record.product = manual.product;
+    const learned = runtimeRules.productManualMappings?.[record.originalParsedProduct] || runtimeRules.productManualMappings?.[record.product];
+    const rule = manual || learned;
+    if (!rule) return record;
+    if (rule.details?.length) {
+      applyStockDetailsToRecord(record, rule.details, manual ? "本次人工指定" : "永久指定");
+      return record;
+    }
+    if (rule.product) {
+      record.product = rule.product;
       record.stockDetails = [{
-        item: manual.product,
+        item: rule.product,
         variant: "",
-        quantity: Number(manual.quantity || record.quantity || 1),
+        quantity: Number(rule.quantity || record.quantity || 1),
         unit: record.unit || "件",
-        note: "人工指定"
+        note: manual ? "本次人工指定" : "永久指定"
       }];
-      record.quantity = Number(manual.quantity || record.quantity || 1);
+      record.quantity = Number(rule.quantity || record.quantity || 1);
       record.countedQuantity = record.quantity;
       record.issues = record.issues.filter(issue => !/缺少商品名稱|無法判斷商品名稱|數量無法判斷/.test(issue));
     }
@@ -935,7 +941,7 @@
     listEl.innerHTML = currentSession.sources.map(source => `
       <div class="production-session-item" data-key="${escapeHtml(source.key)}">
         <span>✓ ${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span>
-        <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong><button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改製程</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button></span>
+        <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong><button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改名稱</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button></span>
       </div>
     `).join("");
   }
@@ -1283,43 +1289,106 @@
   }
 
 
+  let productionPickerState = { recordKey: "", originalName: "", details: [] };
+
+  function getInventoryProductOptions() {
+    try {
+      if (typeof window.gbSortedActiveItems === "function") return window.gbSortedActiveItems().map(item => item.name).filter(Boolean);
+      if (typeof gbSortedActiveItems === "function") return gbSortedActiveItems().map(item => item.name).filter(Boolean);
+    } catch (error) {
+      console.warn(error);
+    }
+    return [];
+  }
+
+  function findRecordByKey(path, file) {
+    return currentSession.records.find(r => path && r.path === path) || currentSession.records.find(r => r.filename === file);
+  }
+
+  function renderProductionPickerOptions() {
+    const select = $("productionProductPickerSelect");
+    if (!select) return;
+    const options = getInventoryProductOptions();
+    select.innerHTML = options.length
+      ? options.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
+      : `<option value="">目前讀不到庫存品項清單</option>`;
+  }
+
+  function renderProductionPickerList() {
+    const list = $("productionProductPickerList");
+    if (!list) return;
+    if (!productionPickerState.details.length) {
+      list.innerHTML = `<div class="production-picker-empty">尚未加入指定品項。若一個檔案包含兩個顏色，請分別加入兩個庫存品項。</div>`;
+      return;
+    }
+    list.innerHTML = productionPickerState.details.map((d, idx) => `
+      <div class="production-picker-row">
+        <span>${escapeHtml(d.item)}</span>
+        <strong>${escapeHtml(d.quantity)} ${escapeHtml(d.unit || "件")}</strong>
+        <button type="button" class="secondary small production-picker-remove" data-index="${idx}">移除</button>
+      </div>
+    `).join("");
+  }
+
+  function openProductionProductPicker(record) {
+    if (!record) return;
+    renderProductionPickerOptions();
+    const key = record.path || record.filename;
+    productionPickerState = {
+      recordKey: key,
+      originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
+      details: (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
+        item: d.item,
+        quantity: Number(d.quantity || record.countedQuantity || 1),
+        unit: d.unit || record.unit || "件",
+        variant: d.variant || "",
+        note: "人工指定"
+      }))
+    };
+    const title = $("productionProductPickerTitle");
+    if (title) title.textContent = record.filename || record.product || "指定商品";
+    const qty = $("productionProductPickerQty");
+    if (qty) qty.value = String(record.countedQuantity || record.quantity || 1);
+    const permanent = $("productionProductPickerPermanent");
+    if (permanent) permanent.checked = true;
+    renderProductionPickerList();
+    if (typeof openModal === "function") openModal("productionProductPickerModal");
+    else $("productionProductPickerModal")?.classList.add("show");
+  }
+
+  function closeProductionProductPicker() {
+    if (typeof closeModal === "function") closeModal("productionProductPickerModal");
+    else $("productionProductPickerModal")?.classList.remove("show");
+  }
+
+  function applyStockDetailsToRecord(record, details, note) {
+    if (!record || !details?.length) return;
+    const cleanDetails = details.map(d => ({
+      item: String(d.item || "").trim(),
+      variant: splitStockItemName(d.item).variant || d.variant || "",
+      quantity: Number(d.quantity || 1),
+      unit: d.unit || record.unit || "件",
+      note: note || "人工指定"
+    })).filter(d => d.item && Number(d.quantity) > 0);
+    if (!cleanDetails.length) return;
+    record.stockDetails = cleanDetails;
+    record.product = cleanDetails.length === 1 ? cleanDetails[0].item : cleanDetails.map(d => d.item).join("+");
+    record.quantity = cleanDetails.reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+    record.countedQuantity = record.quantity;
+    record.variantDetails = cleanDetails.map(d => ({ name: splitStockItemName(d.item).variant || d.item, quantity: Number(d.quantity || 0) }));
+    record.colors = cleanDetails.map(d => splitStockItemName(d.item).variant).filter(Boolean);
+    record.issues = (record.issues || []).filter(issue => !/缺少商品名稱|無法判斷商品名稱|數量無法判斷/.test(issue));
+    if (note) record.manualNote = note;
+  }
+
   function handleRecordProductAction(event) {
     const btn = event.target.closest(".production-record-product-btn");
     if (!btn) return;
     const path = btn.dataset.path || "";
     const file = btn.dataset.file || "";
-    const record = currentSession.records.find(r => r.path === path) || currentSession.records.find(r => r.filename === file);
-    const currentName = record?.product || "";
-    const product = prompt("請輸入這一筆明細要計算成哪個商品名稱：", currentName);
-    if (!product || !product.trim()) return;
-    const qtyRaw = prompt("請輸入這一筆明細的計算數量：", String(record?.countedQuantity || record?.quantity || 1));
-    const qty = Number(qtyRaw || 1);
-    const finalQty = Number.isFinite(qty) && qty >= 0 ? qty : 1;
-    const key = path || file;
-
-    const permanent = confirm("要讓系統永久記住這個歸類嗎？\n\n按「確定」：之後相同解析名稱會自動歸到這個品項。\n按「取消」：只修正本次分析。")
-    const originalName = record?.originalParsedProduct || record?.originalProduct || record?.product || currentName;
-
-    if (permanent) {
-      rememberProductAlias(originalName, product.trim());
-    } else {
-      runtimeRules.manualItems = {
-        ...(runtimeRules.manualItems || {}),
-        [key]: { product: product.trim(), quantity: finalQty }
-      };
-      saveRuntimeRules();
-    }
-
-    currentSession.records.forEach(r => {
-      const sameRecord = (path && r.path === path) || (!path && r.filename === file);
-      const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
-      if (sameRecord || sameLearnedName) {
-        applyProductToRecord(r, product.trim(), sameRecord ? finalQty : r.countedQuantity || r.quantity || 1, permanent ? "永久規則" : "本次修正");
-      }
-    });
-    lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
-    renderAnalysis(lastAnalysis);
-    updateProductionStatus(permanent ? "已建立商品學習規則，並套用到目前分析。" : "已套用單筆明細商品修正（只影響本次分析）。", "done");
+    const record = findRecordByKey(path, file);
+    if (!record) return;
+    openProductionProductPicker(record);
   }
 
   function handleIssueAction(event) {
@@ -1353,20 +1422,8 @@
       return;
     }
     if (action === "manual-product" && file) {
-      const product = prompt("請輸入要計算的商品名稱：", "");
-      if (!product) return;
-      const qtyRaw = prompt("請輸入數量：", "1");
-      const qty = Number(qtyRaw || 1);
-      const finalQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
       const record = currentSession.records.find(r => r.filename === file || r.path === file);
-      const permanent = confirm("要讓系統永久記住這個歸類嗎？\n\n按「確定」：之後相同解析名稱會自動歸到這個品項。\n按「取消」：只修正本次分析。")
-      if (permanent && record) {
-        rememberProductAlias(record.originalParsedProduct || record.product, product.trim());
-      } else {
-        runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [file]: { product: product.trim(), quantity: finalQty } };
-        saveRuntimeRules();
-      }
-      rerunLastAnalysis();
+      if (record) openProductionProductPicker(record);
       return;
     }
     if (action === "ignore-warning" && file) {
@@ -1440,6 +1497,43 @@
     });
     $("productionProductDetailPanel")?.addEventListener("click", handleRecordProductAction);
     $("productionDetailResult")?.addEventListener("click", handleRecordProductAction);
+    $("productionProductPickerAddBtn")?.addEventListener("click", () => {
+      const itemName = $("productionProductPickerSelect")?.value || "";
+      const qty = Number($("productionProductPickerQty")?.value || 1);
+      if (!itemName) return alert("請先選擇庫存品項。");
+      if (!Number.isFinite(qty) || qty <= 0) return alert("請輸入正確數量。");
+      productionPickerState.details.push({ item: itemName, quantity: qty, unit: "件", note: "人工指定" });
+      renderProductionPickerList();
+    });
+    $("productionProductPickerList")?.addEventListener("click", event => {
+      const btn = event.target.closest(".production-picker-remove");
+      if (!btn) return;
+      productionPickerState.details.splice(Number(btn.dataset.index), 1);
+      renderProductionPickerList();
+    });
+    $("productionProductPickerCancelBtn")?.addEventListener("click", closeProductionProductPicker);
+    $("productionProductPickerSaveBtn")?.addEventListener("click", () => {
+      const record = currentSession.records.find(r => (r.path || r.filename) === productionPickerState.recordKey);
+      if (!record) return;
+      if (!productionPickerState.details.length) return alert("請至少加入一個庫存品項。");
+      const permanent = !!$("productionProductPickerPermanent")?.checked;
+      const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
+      if (permanent) {
+        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { details: productionPickerState.details } };
+      } else {
+        runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
+      }
+      saveRuntimeRules();
+      currentSession.records.forEach(r => {
+        const sameRecord = (r.path || r.filename) === productionPickerState.recordKey;
+        const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
+        if (sameRecord || sameLearnedName) applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
+      });
+      closeProductionProductPicker();
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderAnalysis(lastAnalysis);
+      updateProductionStatus(permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
+    });
     $("productionProductSearchInput")?.addEventListener("input", event => {
       productSearchTerm = event.target.value || "";
       if (lastAnalysis) renderAnalysis(lastAnalysis);
