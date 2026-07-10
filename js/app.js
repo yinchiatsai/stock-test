@@ -11507,6 +11507,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (adjustPane) adjustPane.classList.toggle('active', gbQuickStockMode === 'adjust');
     const confirmBtn = document.getElementById('confirmQuickStockBtn');
     if (confirmBtn) confirmBtn.textContent = gbQuickStockMode === 'adjust' ? '確認調整' : '確認更新';
+    gbShowQuickInlineError('');
+    gbRefreshQuickAdjustReasons();
     gbUpdateQuickAdjustPreview();
   }
 
@@ -11514,6 +11516,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const cleanBase = (base || '庫存調整').trim();
     const cleanNote = (note || '').trim();
     return cleanNote ? `${cleanBase}｜${cleanNote}` : cleanBase;
+  }
+
+  function gbShowQuickInlineError(message) {
+    const el = document.getElementById('quickStockInlineError');
+    if (!el) {
+      if (typeof showToast === 'function') showToast(message);
+      return;
+    }
+    el.textContent = message || '';
+    el.hidden = !message;
+  }
+
+  function gbRefreshQuickAdjustReasons() {
+    const type = document.getElementById('quickAdjustType')?.value || 'decrease';
+    const reason = document.getElementById('quickAdjustReason');
+    if (!reason) return;
+    const decreaseReasons = ['料物瑕疵', '報廢調整', '測試耗材', '遺失', '其他扣減'];
+    const increaseReasons = ['盤點補入', '其他增加'];
+    const reasons = type === 'increase' ? increaseReasons : decreaseReasons;
+    const current = reason.value;
+    reason.innerHTML = reasons.map(r => `<option value="${r}">${r}</option>`).join('');
+    reason.value = reasons.includes(current) ? current : reasons[0];
   }
 
   function gbUpdateQuickAdjustPreview() {
@@ -11552,6 +11576,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (adjustQty) adjustQty.value = '';
     const adjustType = document.getElementById('quickAdjustType');
     if (adjustType) adjustType.value = 'decrease';
+    gbRefreshQuickAdjustReasons();
     const adjustReason = document.getElementById('quickAdjustReason');
     if (adjustReason) adjustReason.value = '料物瑕疵';
     const adjustNote = document.getElementById('quickAdjustNote');
@@ -11576,15 +11601,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const note = document.getElementById('quickAdjustNote')?.value || '';
 
       if (!qty || qty <= 0) {
-        showToast('請輸入正確調整數量');
+        gbShowQuickInlineError('請輸入正確調整數量。');
         return;
       }
 
       const newStock = type === 'increase' ? oldStock + qty : oldStock - qty;
       if (newStock < 0) {
-        showToast('扣減後庫存不可小於 0');
+        gbShowQuickInlineError('扣減後庫存不可小於 0，請確認數量。');
         return;
       }
+      gbShowQuickInlineError('');
 
       item.stock = newStock;
       addStockHistory(item, oldStock, newStock, type === 'increase' ? '庫存增加' : '庫存扣減', gbBuildQuickReason(baseReason, note));
@@ -11602,13 +11628,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const custom = document.getElementById('quickStockCustomReason')?.value || '';
 
     if (Number.isNaN(newQty) || newQty < 0) {
-      showToast('請輸入正確庫存數量');
+      gbShowQuickInlineError('請輸入正確庫存數量。');
       return;
     }
     if (Number.isNaN(newSafety) || newSafety < 0) {
-      showToast('請輸入正確安全庫存');
+      gbShowQuickInlineError('請輸入正確安全庫存。');
       return;
     }
+    gbShowQuickInlineError('');
 
     const oldSafety = Number(item.safety) || 0;
     item.stock = newQty;
@@ -11632,7 +11659,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     ['quickAdjustQty','quickAdjustType'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.oninput = el.onchange = gbUpdateQuickAdjustPreview;
+      if (el) el.oninput = el.onchange = () => {
+        if (id === 'quickAdjustType') gbRefreshQuickAdjustReasons();
+        gbShowQuickInlineError('');
+        gbUpdateQuickAdjustPreview();
+      };
     });
     const confirmBtn = document.getElementById('confirmQuickStockBtn');
     if (confirmBtn) confirmBtn.onclick = window.confirmQuickStockUpdate;
