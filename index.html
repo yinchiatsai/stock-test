@@ -676,19 +676,26 @@
     <div class="modal-box production-picker-modal-box">
       <h3>指定庫存商品</h3>
       <p class="note compact-note" id="productionProductPickerTitle">請選擇正式庫存品項。若一個檔案包含兩個顏色，請分別加入兩個品項。</p>
-      <div class="form-grid compact-adjust-grid">
-        <div class="field">
-          <label>庫存品項</label>
-          <input id="productionProductPickerSearch" type="text" placeholder="搜尋庫存品項，例如：木木筆、軍牌、銀" autocomplete="off" />
-          <select id="productionProductPickerSelect" size="6"></select>
-          <div class="form-hint">先搜尋正式庫存名稱，再加入指定品項；原解析名稱不會自動放入下方清單。</div>
+      <div class="production-picker-layout">
+        <div class="production-picker-search-block">
+          <div class="field">
+            <label>搜尋庫存品項</label>
+            <input id="productionProductPickerSearch" type="text" placeholder="輸入關鍵字，例如：木木筆、軍牌、銀" autocomplete="off" />
+          </div>
+          <div id="productionProductPickerResults" class="production-picker-results">
+            <div class="production-picker-empty">請輸入關鍵字搜尋正式庫存品項。</div>
+          </div>
         </div>
-        <div class="field">
-          <label>數量</label>
-          <input id="productionProductPickerQty" type="number" min="1" step="1" value="1" />
+        <div class="production-picker-side">
+          <div class="field">
+            <label>加入數量</label>
+            <input id="productionProductPickerQty" type="number" min="1" step="1" value="1" />
+          </div>
+          <div class="form-hint">點選左側搜尋結果後，會加入下方清單；原解析名稱不會自動加入。</div>
         </div>
       </div>
-      <button type="button" class="secondary" id="productionProductPickerAddBtn">加入指定品項</button>
+      <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
+      <div class="production-picker-list-title">已指定庫存品項</div>
       <div id="productionProductPickerList" class="production-picker-list"></div>
       <label class="check-field production-picker-check">
         <input type="checkbox" id="productionProductPickerPermanent" checked />
