@@ -11485,3 +11485,161 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("defectItemSearchInput")?.addEventListener("input", gbRenderDefectAutocomplete);
   document.getElementById("defectDeductBtn")?.addEventListener("click", gbDeductDefectStock);
 });
+
+/* ---------- V3.8 快速盤點：盤點修正 / 庫存調整雙模式 ---------- */
+(function(){
+  let gbQuickStockMode = 'audit';
+
+  function gbNum(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function gbSetQuickStockMode(mode) {
+    gbQuickStockMode = mode === 'adjust' ? 'adjust' : 'audit';
+    document.querySelectorAll('.quick-stock-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.quickTab === gbQuickStockMode);
+    });
+    const auditPane = document.getElementById('quickStockPaneAudit');
+    const adjustPane = document.getElementById('quickStockPaneAdjust');
+    if (auditPane) auditPane.classList.toggle('active', gbQuickStockMode === 'audit');
+    if (adjustPane) adjustPane.classList.toggle('active', gbQuickStockMode === 'adjust');
+    const confirmBtn = document.getElementById('confirmQuickStockBtn');
+    if (confirmBtn) confirmBtn.textContent = gbQuickStockMode === 'adjust' ? '確認調整' : '確認更新';
+    gbUpdateQuickAdjustPreview();
+  }
+
+  function gbBuildQuickReason(base, note) {
+    const cleanBase = (base || '庫存調整').trim();
+    const cleanNote = (note || '').trim();
+    return cleanNote ? `${cleanBase}｜${cleanNote}` : cleanBase;
+  }
+
+  function gbUpdateQuickAdjustPreview() {
+    const item = getItem(document.getElementById('quickStockItemId')?.value);
+    const current = gbNum(item?.stock, gbNum(document.getElementById('quickStockOldQty')?.value));
+    const qty = gbNum(document.getElementById('quickAdjustQty')?.value, 0);
+    const type = document.getElementById('quickAdjustType')?.value || 'decrease';
+    const next = type === 'increase' ? current + qty : current - qty;
+    const currentEl = document.getElementById('quickAdjustCurrentQty');
+    const preview = document.getElementById('quickAdjustPreview');
+    if (currentEl) currentEl.textContent = current;
+    if (preview) {
+      if (!qty) preview.textContent = `調整後庫存：${current}`;
+      else preview.innerHTML = `調整後庫存：<strong>${next}</strong> <span class="muted">（${current} ${type === 'increase' ? '+' : '-'} ${qty}）</span>`;
+      preview.classList.toggle('danger', next < 0);
+    }
+  }
+
+  const originalOpenQuickStockModal = window.openQuickStockModal;
+  window.openQuickStockModal = function(itemId) {
+    const item = getItem(itemId);
+    if (!item) return;
+    document.getElementById('quickStockItemId').value = item.id;
+    document.getElementById('quickStockItemText').textContent = item.name;
+    document.getElementById('quickStockOldQty').value = Number(item.stock) || 0;
+    document.getElementById('quickStockNewQty').value = Number(item.stock) || 0;
+    const safetyInput = document.getElementById('quickStockSafetyQty');
+    if (safetyInput) safetyInput.value = Number(item.safety) || 0;
+    const reason = document.getElementById('quickStockReason');
+    if (reason) reason.value = '盤點更新';
+    const custom = document.getElementById('quickStockCustomReason');
+    if (custom) custom.value = '';
+    const adjustQty = document.getElementById('quickAdjustQty');
+    if (adjustQty) adjustQty.value = '';
+    const adjustType = document.getElementById('quickAdjustType');
+    if (adjustType) adjustType.value = 'decrease';
+    const adjustReason = document.getElementById('quickAdjustReason');
+    if (adjustReason) adjustReason.value = '料物瑕疵';
+    const adjustNote = document.getElementById('quickAdjustNote');
+    if (adjustNote) adjustNote.value = '';
+    gbSetQuickStockMode('audit');
+    openModal('quickStockModal');
+  };
+
+  window.confirmQuickStockUpdate = function() {
+    const item = getItem(document.getElementById('quickStockItemId')?.value);
+    if (!item) {
+      showToast('找不到品項');
+      return;
+    }
+
+    const oldStock = Number(item.stock) || 0;
+
+    if (gbQuickStockMode === 'adjust') {
+      const qty = gbNum(document.getElementById('quickAdjustQty')?.value, 0);
+      const type = document.getElementById('quickAdjustType')?.value || 'decrease';
+      const baseReason = document.getElementById('quickAdjustReason')?.value || (type === 'increase' ? '增加庫存' : '扣減庫存');
+      const note = document.getElementById('quickAdjustNote')?.value || '';
+
+      if (!qty || qty <= 0) {
+        showToast('請輸入正確調整數量');
+        return;
+      }
+
+      const newStock = type === 'increase' ? oldStock + qty : oldStock - qty;
+      if (newStock < 0) {
+        showToast('扣減後庫存不可小於 0');
+        return;
+      }
+
+      item.stock = newStock;
+      addStockHistory(item, oldStock, newStock, type === 'increase' ? '庫存增加' : '庫存扣減', gbBuildQuickReason(baseReason, note));
+      lastUpdatedItemId = item.id;
+      saveData();
+      closeModal('quickStockModal');
+      renderAll();
+      showToast(`${item.name} 已${type === 'increase' ? '增加' : '扣減'} ${qty}，目前庫存 ${newStock}`);
+      return;
+    }
+
+    const newQty = Number(document.getElementById('quickStockNewQty')?.value);
+    const newSafety = Number(document.getElementById('quickStockSafetyQty')?.value);
+    const reasonBase = document.getElementById('quickStockReason')?.value || '盤點更新';
+    const custom = document.getElementById('quickStockCustomReason')?.value || '';
+
+    if (Number.isNaN(newQty) || newQty < 0) {
+      showToast('請輸入正確庫存數量');
+      return;
+    }
+    if (Number.isNaN(newSafety) || newSafety < 0) {
+      showToast('請輸入正確安全庫存');
+      return;
+    }
+
+    const oldSafety = Number(item.safety) || 0;
+    item.stock = newQty;
+    item.safety = newSafety;
+
+    if (oldStock !== newQty || oldSafety !== newSafety) {
+      const safetyNote = oldSafety !== newSafety ? `安全庫存 ${oldSafety} → ${newSafety}` : '';
+      addStockHistory(item, oldStock, newQty, gbBuildQuickReason(reasonBase, custom), safetyNote);
+      lastUpdatedItemId = item.id;
+    }
+
+    saveData();
+    closeModal('quickStockModal');
+    renderAll();
+    showToast(`${item.name} 已更新`);
+  };
+
+  function gbBindQuickStockV38() {
+    document.querySelectorAll('.quick-stock-tab').forEach(btn => {
+      btn.onclick = () => gbSetQuickStockMode(btn.dataset.quickTab);
+    });
+    ['quickAdjustQty','quickAdjustType'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = el.onchange = gbUpdateQuickAdjustPreview;
+    });
+    const confirmBtn = document.getElementById('confirmQuickStockBtn');
+    if (confirmBtn) confirmBtn.onclick = window.confirmQuickStockUpdate;
+    const cancelBtn = document.getElementById('cancelQuickStockBtn');
+    if (cancelBtn) cancelBtn.onclick = () => closeModal('quickStockModal');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', gbBindQuickStockV38);
+  } else {
+    gbBindQuickStockV38();
+  }
+})();
