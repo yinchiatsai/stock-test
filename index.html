@@ -571,6 +571,7 @@
           <input id="quickAdjustNote" placeholder="例如：製程發現料物瑕疵" />
         </div>
         <div class="quick-adjust-preview" id="quickAdjustPreview">調整後庫存：-</div>
+        <div class="modal-inline-error" id="quickStockInlineError" hidden></div>
       </section>
 
       <div class="modal-actions">
@@ -678,7 +679,9 @@
       <div class="form-grid compact-adjust-grid">
         <div class="field">
           <label>庫存品項</label>
-          <select id="productionProductPickerSelect"></select>
+          <input id="productionProductPickerSearch" type="text" placeholder="搜尋庫存品項，例如：木木筆、軍牌、銀" autocomplete="off" />
+          <select id="productionProductPickerSelect" size="6"></select>
+          <div class="form-hint">先搜尋正式庫存名稱，再加入指定品項；原解析名稱不會自動放入下方清單。</div>
         </div>
         <div class="field">
           <label>數量</label>
