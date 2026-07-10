@@ -1306,19 +1306,51 @@
     return currentSession.records.find(r => path && r.path === path) || currentSession.records.find(r => r.filename === file);
   }
 
+  function setProductionPickerMessage(message = "", type = "") {
+    const el = $("productionProductPickerMessage");
+    if (!el) return;
+    el.textContent = message || "";
+    el.className = `production-picker-message ${type ? "is-" + type : ""}`.trim();
+  }
+
+  function addProductionPickerDetail(itemName) {
+    const cleanName = String(itemName || "").trim();
+    const qty = Number($("productionProductPickerQty")?.value || 1);
+    if (!cleanName) {
+      setProductionPickerMessage("請先搜尋並點選正式庫存品項。", "error");
+      return;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setProductionPickerMessage("請輸入正確數量。", "error");
+      return;
+    }
+    productionPickerState.details.push({ item: cleanName, quantity: qty, unit: "件", note: "人工指定" });
+    renderProductionPickerList();
+    setProductionPickerMessage(`已加入：${cleanName} × ${qty}`, "done");
+  }
+
   function renderProductionPickerOptions(filterText = "") {
-    const select = $("productionProductPickerSelect");
-    if (!select) return;
+    const box = $("productionProductPickerResults");
+    if (!box) return;
     const keyword = String(filterText || "").trim().toLowerCase();
     const allOptions = getInventoryProductOptions();
-    let options = allOptions;
-    if (keyword) {
-      options = allOptions.filter(name => String(name).toLowerCase().includes(keyword));
+    if (!keyword) {
+      box.innerHTML = `<div class="production-picker-empty">請輸入關鍵字搜尋正式庫存品項。</div>`;
+      return;
     }
-    options = options.slice(0, 80);
-    select.innerHTML = options.length
-      ? options.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")
-      : `<option value="">${keyword ? "找不到符合的庫存品項" : "請先輸入關鍵字搜尋庫存品項"}</option>`;
+    const options = allOptions
+      .filter(name => String(name).toLowerCase().includes(keyword))
+      .slice(0, 40);
+    if (!options.length) {
+      box.innerHTML = `<div class="production-picker-empty">找不到符合「${escapeHtml(filterText)}」的庫存品項。</div>`;
+      return;
+    }
+    box.innerHTML = options.map(name => `
+      <button type="button" class="production-picker-result" data-item="${escapeHtml(name)}">
+        <span>${escapeHtml(name)}</span>
+        <small>點選加入</small>
+      </button>
+    `).join("");
   }
 
   function renderProductionPickerList() {
@@ -1342,6 +1374,7 @@
     const searchInput = $("productionProductPickerSearch");
     if (searchInput) searchInput.value = "";
     renderProductionPickerOptions("");
+    setProductionPickerMessage("");
     const key = record.path || record.filename;
     const hasManualDetails = (record.stockDetails || []).some(d => /人工指定|永久指定|本次指定/.test(d.note || record.manualNote || ""));
     productionPickerState = {
@@ -1509,14 +1542,12 @@
     $("productionDetailResult")?.addEventListener("click", handleRecordProductAction);
     $("productionProductPickerSearch")?.addEventListener("input", event => {
       renderProductionPickerOptions(event.target.value || "");
+      setProductionPickerMessage("");
     });
-    $("productionProductPickerAddBtn")?.addEventListener("click", () => {
-      const itemName = $("productionProductPickerSelect")?.value || "";
-      const qty = Number($("productionProductPickerQty")?.value || 1);
-      if (!itemName || itemName.includes("找不到") || itemName.includes("請先")) return alert("請先搜尋並選擇正式庫存品項。");
-      if (!Number.isFinite(qty) || qty <= 0) return alert("請輸入正確數量。");
-      productionPickerState.details.push({ item: itemName, quantity: qty, unit: "件", note: "人工指定" });
-      renderProductionPickerList();
+    $("productionProductPickerResults")?.addEventListener("click", event => {
+      const btn = event.target.closest(".production-picker-result");
+      if (!btn) return;
+      addProductionPickerDetail(btn.dataset.item || "");
     });
     $("productionProductPickerList")?.addEventListener("click", event => {
       const btn = event.target.closest(".production-picker-remove");
@@ -1528,7 +1559,10 @@
     $("productionProductPickerSaveBtn")?.addEventListener("click", () => {
       const record = currentSession.records.find(r => (r.path || r.filename) === productionPickerState.recordKey);
       if (!record) return;
-      if (!productionPickerState.details.length) return alert("請至少加入一個庫存品項。");
+      if (!productionPickerState.details.length) {
+        setProductionPickerMessage("請至少加入一個庫存品項。", "error");
+        return;
+      }
       const permanent = !!$("productionProductPickerPermanent")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
       if (permanent) {
