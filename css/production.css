@@ -675,3 +675,101 @@ main:has(#production:not(.hidden)) {
   border: 1px dashed var(--line, #d9e2e2);
   border-radius: 14px;
 }
+
+/* V3.12 指定商品搜尋 UI 改良 */
+.production-picker-modal-box {
+  max-width: 760px;
+  width: min(760px, calc(100vw - 32px));
+  padding: 28px;
+}
+.production-picker-modal-box .compact-note {
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border-radius: 18px;
+}
+.production-picker-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+  align-items: start;
+}
+.production-picker-search-block,
+.production-picker-side {
+  min-width: 0;
+}
+.production-picker-results {
+  margin-top: 10px;
+  max-height: 280px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 4px;
+}
+.production-picker-result {
+  width: 100%;
+  border: 1px solid #dfe8e6;
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #24474c;
+  box-shadow: none;
+}
+.production-picker-result:hover {
+  border-color: #3d676d;
+  background: #f5faf9;
+}
+.production-picker-result span {
+  font-weight: 850;
+  line-height: 1.35;
+}
+.production-picker-result small {
+  flex: 0 0 auto;
+  color: #7b8d8f;
+  font-weight: 750;
+}
+.production-picker-side .form-hint {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f7f4ea;
+}
+.production-picker-message {
+  min-height: 20px;
+  margin-top: 12px;
+  font-weight: 800;
+  color: #789;
+}
+.production-picker-message.is-error {
+  color: #b94a48;
+}
+.production-picker-message.is-done {
+  color: #2f7d4f;
+}
+.production-picker-list-title {
+  margin-top: 12px;
+  color: #6f8386;
+  font-weight: 900;
+}
+.production-picker-list {
+  max-height: 220px;
+}
+.production-picker-empty {
+  background: #f7f4ea;
+}
+@media (max-width: 720px) {
+  .production-picker-modal-box {
+    width: min(94vw, 760px);
+    padding: 22px;
+  }
+  .production-picker-layout {
+    grid-template-columns: 1fr;
+  }
+  .production-picker-results {
+    max-height: 220px;
+  }
+}
