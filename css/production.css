@@ -654,3 +654,24 @@ main:has(#production:not(.hidden)) {
 .production-picker-row span { font-weight: 800; color: #24474c; }
 .production-picker-check { margin-top: 14px; }
 @media (max-width: 720px) { .production-picker-row { grid-template-columns: 1fr; } }
+
+/* V3.11 指定商品搜尋選單 */
+.production-picker-modal-box #productionProductPickerSearch {
+  margin-bottom: 8px;
+}
+.production-picker-modal-box #productionProductPickerSelect {
+  min-height: 170px;
+  padding: 8px;
+}
+.form-hint {
+  margin-top: 6px;
+  color: var(--muted, #789);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.production-picker-empty {
+  color: var(--muted, #789);
+  padding: 12px;
+  border: 1px dashed var(--line, #d9e2e2);
+  border-radius: 14px;
+}
