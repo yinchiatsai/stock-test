@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  // V3.7 real update: product-first parser helpers, bracket specs, multi-color filename tokens.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -156,17 +157,41 @@
   }
 
   function parseColorList(text) {
-    const normalized = String(text || "").replace(/、/g, ",").replace(/，/g, ",");
+    const normalized = String(text || "")
+      .replace(/、/g, ",")
+      .replace(/，/g, ",")
+      .replace(/[＿_]/g, ",");
     return normalized.split(",").map(x => x.trim()).filter(Boolean);
+  }
+
+  function isColorOrProductionAttributeToken(text) {
+    const token = String(text || "").trim();
+    if (!token) return true;
+    if (KNOWN_COLORS.includes(token)) return true;
+    if (normalizeProductionAttribute(token).attribute) return true;
+    return false;
+  }
+
+  function colorsFromSpecText(text) {
+    const parts = parseColorList(text)
+      .map(x => x.replace(/^(左|右|上|下|前|後|后)/, "").trim())
+      .filter(Boolean);
+    const colors = [];
+    parts.forEach(part => {
+      if (KNOWN_COLORS.includes(part)) colors.push(part);
+    });
+    return Array.from(new Set(colors));
   }
 
   function isKnownColorText(text) {
     const value = String(text || "").trim();
     if (!value) return false;
     if (KNOWN_COLORS.includes(value)) return true;
-    if (/[，,、]/.test(value)) {
+    if (/[，,、＿_]/.test(value)) {
       const parts = parseColorList(value);
-      return parts.length > 0 && parts.every(part => KNOWN_COLORS.includes(part));
+      const colorCount = parts.filter(part => KNOWN_COLORS.includes(part)).length;
+      // 允許括號內混合「顏色 + 製作/加工屬性」，例如：(銀_單)、(黑_雙)
+      return colorCount > 0 && parts.every(part => isColorOrProductionAttributeToken(part));
     }
     return false;
   }
@@ -175,7 +200,7 @@
     for (let i = stopIndex; i >= 0; i--) {
       const group = groups[i];
       if (!group) continue;
-      if (isKnownColorText(group.text)) return parseColorList(group.text);
+      if (isKnownColorText(group.text)) return colorsFromSpecText(group.text);
     }
     return [];
   }
@@ -323,6 +348,8 @@
       const text = String(inner || "").trim();
       if (normalizeProductionAttribute(text).attribute) return "";
       if (isKnownColorText(text)) return "";
+      const parts = parseColorList(text);
+      if (parts.length && parts.every(part => isColorOrProductionAttributeToken(part))) return "";
       return full;
     });
     value = value
@@ -394,15 +421,32 @@
   }
 
   function detectAnyVariant(baseName) {
+    const variants = detectFilenameVariants(baseName);
+    return variants[0] || "";
+  }
+
+  function detectFilenameVariants(baseName) {
     const text = normalizedBaseName(baseName);
-    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
-    for (const seg of segments) {
-      const cleaned = seg.replace(/[()（）]/g, "").trim();
-      if (KNOWN_COLORS.includes(cleaned)) return cleaned;
-      const m = seg.match(/[（(]([^()（）]+)[）)]/);
-      if (m && KNOWN_COLORS.includes(m[1].trim())) return m[1].trim();
-    }
-    return "";
+    const colors = [];
+    const pushColor = color => {
+      const c = String(color || "").trim();
+      if (c && KNOWN_COLORS.includes(c) && !colors.includes(c)) colors.push(c);
+    };
+
+    // 括號內顏色/規格，例如：薄款金屬卡(銀_單)、黑筆(銀)
+    parseParenGroups(text).forEach(group => {
+      colorsFromSpecText(group.text).forEach(pushColor);
+    });
+
+    // 底線/連字號片段，例如：極細筆_玫瑰、右玫瑰、左黑、上銀、下黑
+    text.split(/[_-]+/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+      let cleaned = seg.replace(/[()（）]/g, "").trim();
+      cleaned = cleaned.replace(/^(左|右|上|下|前|後|后)/, "").trim();
+      cleaned = cleaned.replace(/\d+$/g, "").trim();
+      pushColor(cleaned);
+    });
+
+    return colors;
   }
 
   function removeProductionAttributesForIdentity(baseName) {
@@ -609,10 +653,22 @@
     const process = entry.process || inferProcess(pathParts, actualDate);
     const folderCandidate = pathParts.length > 1 ? folderParseCandidate(pathParts) : null;
     const parsed = folderCandidate ? folderCandidate.parsed : parseFullName(filename);
-    const trailingVariant = detectTrailingVariant(base) || detectAnyVariant(base);
-    if (trailingVariant && parsed.product && !parsed.colors?.length && !(parsed.variantDetails || []).length) {
-      parsed.colors = [trailingVariant];
-      parsed.qtyMode = parsed.qtyMode === "default-1" ? "trailing-variant-default-1" : parsed.qtyMode;
+    const filenameVariants = detectFilenameVariants(base);
+    const trailingVariant = detectTrailingVariant(base) || filenameVariants[0] || "";
+    if (parsed.product && !parsed.colors?.length && !(parsed.variantDetails || []).length) {
+      const variants = filenameVariants.length ? filenameVariants : (trailingVariant ? [trailingVariant] : []);
+      if (variants.length === 1) {
+        parsed.colors = variants;
+        parsed.qtyMode = parsed.qtyMode === "default-1" ? "trailing-variant-default-1" : parsed.qtyMode;
+      } else if (variants.length > 1) {
+        parsed.colors = variants;
+        // 若檔名中出現多個顏色且總數量等於顏色數，視為每色各 1；否則先平均可整除，避免把多色全部合成同一品項。
+        const totalQty = Number(parsed.quantity || 1);
+        const per = totalQty % variants.length === 0 ? totalQty / variants.length : 1;
+        parsed.variantDetails = variants.map(color => ({ name: color, quantity: per }));
+        parsed.quantity = totalQty >= variants.length ? totalQty : variants.length;
+        parsed.qtyMode = "filename-multi-variant";
+      }
     }
     const detectedAttribute = detectProductionAttribute(base);
     const side = detectedAttribute.family === "side" ? detectedAttribute.attribute : "";
