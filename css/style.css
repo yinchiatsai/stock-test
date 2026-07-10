@@ -1024,6 +1024,29 @@ body.is-logged-in header{
 }
 .quick-stock-pane { display: none; }
 .quick-stock-pane.active { display: block; }
+
+.stock-readonly-display {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: #f4f7f7;
+  border: 1px solid var(--line, #dfe7e7);
+  color: var(--text, #24363a);
+  font-weight: 900;
+  font-size: 1.08rem;
+  cursor: default;
+  user-select: text;
+}
+.stock-readonly-display::after {
+  content: "目前數量，僅供查看";
+  margin-left: auto;
+  color: var(--muted, #7a8a8d);
+  font-size: .82rem;
+  font-weight: 700;
+}
+
 .quick-stock-current {
   padding: 12px 14px;
   border-radius: 14px;
