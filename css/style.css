@@ -1073,3 +1073,15 @@ body.is-logged-in header{
   .quick-stock-modal-box { width: calc(100vw - 24px); }
   .quick-stock-tabs { grid-template-columns: 1fr; }
 }
+
+/* V3.11 快速盤點：彈窗內錯誤提示 */
+.modal-inline-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1f0;
+  color: #a33a35;
+  border: 1px solid #f1c5c1;
+  font-weight: 700;
+}
+.modal-inline-error[hidden] { display: none !important; }
