@@ -518,27 +518,63 @@
 
 
   <div id="quickStockModal" class="modal-mask">
-    <div class="modal-box">
+    <div class="modal-box quick-stock-modal-box">
       <h3>快速盤點</h3>
       <input type="hidden" id="quickStockItemId" />
       <p id="quickStockItemText">請確認品項</p>
-      <div class="field"><label>目前庫存</label><input id="quickStockOldQty" readonly /></div>
-      <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
-      <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
-      <div class="field">
-        <label>異動原因</label>
-        <select id="quickStockReason">
-          <option value="盤點更新">盤點更新</option>
-          <option value="報廢調整">報廢調整</option>
-          <option value="借出調整">借出調整</option>
-          <option value="歸還調整">歸還調整</option>
-          <option value="其他調整">其他調整</option>
-        </select>
+
+      <div class="quick-stock-tabs" role="tablist" aria-label="快速盤點模式">
+        <button type="button" class="quick-stock-tab active" data-quick-tab="audit">盤點修正</button>
+        <button type="button" class="quick-stock-tab" data-quick-tab="adjust">庫存調整</button>
       </div>
-      <div class="field">
-        <label>自訂原因（選填）</label>
-        <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
-      </div>
+
+      <section class="quick-stock-pane active" id="quickStockPaneAudit">
+        <div class="field"><label>目前庫存</label><input id="quickStockOldQty" readonly /></div>
+        <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
+        <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
+        <div class="field">
+          <label>異動原因</label>
+          <select id="quickStockReason">
+            <option value="盤點更新">盤點更新</option>
+            <option value="盤點修正">盤點修正</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>自訂原因（選填）</label>
+          <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
+        </div>
+      </section>
+
+      <section class="quick-stock-pane" id="quickStockPaneAdjust">
+        <div class="quick-stock-current">目前庫存：<strong id="quickAdjustCurrentQty">0</strong></div>
+        <div class="field">
+          <label>調整方式</label>
+          <select id="quickAdjustType">
+            <option value="decrease">扣減庫存</option>
+            <option value="increase">增加庫存</option>
+          </select>
+        </div>
+        <div class="field"><label>調整數量</label><input id="quickAdjustQty" type="number" min="1" placeholder="例如：10" /></div>
+        <div class="field">
+          <label>原因</label>
+          <select id="quickAdjustReason">
+            <option value="料物瑕疵">料物瑕疵</option>
+            <option value="報廢調整">報廢調整</option>
+            <option value="測試耗材">測試耗材</option>
+            <option value="遺失">遺失</option>
+            <option value="叫貨到貨">叫貨到貨</option>
+            <option value="盤點補入">盤點補入</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>備註（選填）</label>
+          <input id="quickAdjustNote" placeholder="例如：製程發現料物瑕疵" />
+        </div>
+        <div class="quick-adjust-preview" id="quickAdjustPreview">調整後庫存：-</div>
+      </section>
+
       <div class="modal-actions">
         <button class="secondary" id="cancelQuickStockBtn" type="button">取消</button>
         <button id="confirmQuickStockBtn" type="button">確認更新</button>
