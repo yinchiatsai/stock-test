@@ -976,12 +976,10 @@
     const totalQty = analysis.records.reduce((sum, r) => sum + (r.countedQuantity || 0), 0);
     const products = analysis.summary.productRows.length;
     const issues = analysis.summary.issues.length;
-    const merged = analysis.records.filter(r => r.mergedBySide || r.mergedByFolder || r.mergedByProductionAttribute).length;
     $("productionSummaryCards").innerHTML = [
       ["掃描檔案", totalFiles],
       ["計算數量", totalQty],
       ["商品種類", products],
-      ["合併檔案", merged],
       ["待確認", issues]
     ].map(([label, value]) => `<div class="production-summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
   }
@@ -1046,7 +1044,10 @@
             </div>
             <div class="production-side-file">${escapeHtml(r.filename)}</div>
             <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
-            <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>
+            <div class="production-side-actions">
+              <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>
+              <button type="button" class="secondary small danger-text production-record-remove-btn" data-key="${escapeHtml(r.path || r.filename)}">移除此檔</button>
+            </div>
           </div>
         `).join("")}
       </div>`;
@@ -1091,7 +1092,7 @@
       { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}` },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
-      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">整理品項</button>` }
+      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">對應庫存品項</button>` }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
     renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
@@ -1277,7 +1278,7 @@
     if (!product) return;
     const target = prompt("要將這個商品整理為哪個名稱？\n例如：名牌(玫瑰金) → 名牌(玫瑰)", product);
     if (!target || target.trim() === product) return;
-    // 「整理品項」只影響目前工作階段，不建立永久規則。
+    // 「對應庫存品項」只影響目前工作階段，不建立永久規則。
     currentSession.records.forEach(record => {
       if (record.product === product) {
         record.originalProduct = record.product;
@@ -1424,7 +1425,43 @@
     if (note) record.manualNote = note;
   }
 
+  function removeProductionRecord(recordKey) {
+    const key = String(recordKey || "");
+    if (!key) return;
+    const record = currentSession.records.find(r => (r.path || r.filename) === key);
+    if (!record) return;
+    const ok = confirm(`確定要從本次分析移除此檔案嗎？
+
+${record.filename}
+
+只會影響目前分析結果，不會刪除原始檔案，也不會寫入庫存。`);
+    if (!ok) return;
+    currentSession.records = currentSession.records.filter(r => (r.path || r.filename) !== key);
+    if (!currentSession.records.length) {
+      resetSession();
+      updateProductionStatus("已移除最後一筆檔案，目前沒有分析資料。", "idle");
+      return;
+    }
+    lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+    currentSession.label = inferSessionLabel(currentSession.records, currentSession.label);
+    currentSession.updatedAt = new Date().toLocaleString("zh-TW", { hour12: false });
+    const sessionKeys = new Set(currentSession.records.map(recordSessionKey));
+    currentSession.sources = Array.from(sessionKeys).map(sessionKey => {
+      const [date, process] = sessionKey.split("|");
+      const count = currentSession.records.filter(r => recordSessionKey(r) === sessionKey).length;
+      return { key: sessionKey, date, process, count, updatedAt: currentSession.updatedAt };
+    });
+    renderSessionPanel();
+    renderAnalysis(lastAnalysis);
+    updateProductionStatus("已從本次分析移除該檔案，商品使用量已重新計算。", "done");
+  }
+
   function handleRecordProductAction(event) {
+    const removeBtn = event.target.closest(".production-record-remove-btn");
+    if (removeBtn) {
+      removeProductionRecord(removeBtn.dataset.key || "");
+      return;
+    }
     const btn = event.target.closest(".production-record-product-btn");
     if (!btn) return;
     const path = btn.dataset.path || "";
@@ -1587,19 +1624,22 @@
     });
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
-      if (currentSession.records.length && !confirm("清空目前畫面只會清除這個瀏覽器中的分析結果；目前版本尚未寫入庫存，也沒有儲存到雲端。確定清空嗎？")) return;
       const textarea = $("productionFilenameInput");
       if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
-      resetSession();
+      updateProductionStatus("已清除已選資料夾/輸入欄位；目前分析結果仍保留。", "idle");
     });
     $("productionNewSessionBtn")?.addEventListener("click", () => {
       if (currentSession.records.length && !confirm("確定要開始新的分析？這會清除目前畫面上的分析結果；目前版本尚未寫入庫存，也不會刪除任何正式資料。")) return;
+      const textarea = $("productionFilenameInput");
+      if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
+      const processInput = $("productionProcessInput");
+      if (processInput) processInput.value = "";
       resetSession();
     });
     $("productionExportCsvBtn")?.addEventListener("click", exportCsv);
