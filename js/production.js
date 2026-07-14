@@ -63,6 +63,9 @@
   let lastAnalysisOptions = null;
   let currentSession = createEmptySession();
   let productSearchTerm = "";
+  let productViewMode = "all";
+  let lastProductChanges = new Map();
+  let learningSearchTerm = "";
   let selectedProductName = "";
 
   function createEmptySession() {
@@ -893,6 +896,26 @@
     };
   }
 
+  function productQuantityMap(productRows = []) {
+    return new Map((productRows || []).map(row => [row.name, Number(row.quantity || 0)]));
+  }
+
+  function calculateProductChanges(previousRows = [], nextRows = []) {
+    const previous = productQuantityMap(previousRows);
+    const changes = new Map();
+    (nextRows || []).forEach(row => {
+      const before = previous.get(row.name);
+      const after = Number(row.quantity || 0);
+      if (before === undefined) changes.set(row.name, { type: "new", delta: after });
+      else if (before !== after) changes.set(row.name, { type: "updated", delta: after - before });
+    });
+    return changes;
+  }
+
+  function captureAnalysisChange(previousRows, analysis) {
+    lastProductChanges = calculateProductChanges(previousRows || [], analysis?.summary?.productRows || []);
+  }
+
   function recordSessionKey(record) {
     return `${record.date || "無日期"}|${record.process || "未指定"}`;
   }
@@ -960,6 +983,7 @@
   function resetSession() {
     currentSession = createEmptySession();
     lastAnalysis = null;
+    lastProductChanges = new Map();
     renderSessionPanel();
     $("productionSummaryCards").innerHTML = '<div class="production-summary-empty">尚未分析</div>';
     ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueResult"].forEach(id => {
@@ -989,7 +1013,7 @@
       el.innerHTML = `<p>${escapeHtml(emptyText || "沒有資料")}</p>`;
       return;
     }
-    el.innerHTML = `<table class="production-table"><thead><tr>${columns.map(c => `<th class="${c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(c => {
+    el.innerHTML = `<table class="production-table"><thead><tr>${columns.map(c => `<th class="${c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr class="${escapeHtml(row._rowClass || "")}">${columns.map(c => {
       const value = c.render ? c.render(row) : row[c.key];
       const content = c.html ? (value || "") : escapeHtml(value);
       return `<td class="${c.num ? "num" : ""}">${content}</td>`;
@@ -1082,14 +1106,31 @@
 
   function renderAnalysis(analysis) {
     renderSummary(analysis);
-    const productRowsAll = analysis.summary.productRows || [];
+    const productRowsAll = (analysis.summary.productRows || []).map(row => {
+      const change = lastProductChanges.get(row.name) || null;
+      return { ...row, _change: change, _rowClass: change ? "production-changed-row" : "" };
+    }).sort((a, b) => {
+      const rank = value => value?._change?.type === "new" ? 0 : value?._change?.type === "updated" ? 1 : 2;
+      return rank(a) - rank(b) || b.quantity - a.quantity || a.name.localeCompare(b.name, "zh-Hant");
+    });
     const keyword = (productSearchTerm || "").trim().toLowerCase();
-    const productRows = keyword ? productRowsAll.filter(row => String(row.name || "").toLowerCase().includes(keyword)) : productRowsAll;
+    let productRows = productViewMode === "changed" ? productRowsAll.filter(row => row._change) : productRowsAll;
+    if (keyword) productRows = productRows.filter(row => String(row.name || "").toLowerCase().includes(keyword));
     const productCountHint = $("productionProductCountHint");
-    if (productCountHint) productCountHint.textContent = keyword ? `顯示 ${productRows.length} / ${productRowsAll.length} 項` : `共 ${productRowsAll.length} 項`;
+    if (productCountHint) {
+      const scope = productViewMode === "changed" ? `本次異動 ${lastProductChanges.size} 項` : `共 ${productRowsAll.length} 項`;
+      productCountHint.textContent = keyword ? `${scope}｜搜尋顯示 ${productRows.length} 項` : scope;
+    }
     if (selectedProductName && !productRowsAll.some(row => row.name === selectedProductName)) selectedProductName = "";
     renderSimpleTable($("productionProductResult"), productRows, [
-      { label: "商品", html: true, render: row => `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}` },
+      { label: "商品", html: true, render: row => {
+        const badge = row._change?.type === "new"
+          ? `<span class="production-change-badge is-new">新增</span>`
+          : row._change?.type === "updated"
+            ? `<span class="production-change-badge is-updated">${row._change.delta > 0 ? "+" : ""}${escapeHtml(row._change.delta)}</span>`
+            : "";
+        return `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${badge}${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}`;
+      } },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
       { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">對應庫存品項</button>` }
@@ -1135,6 +1176,48 @@
     $("productionExportCsvBtn").disabled = false;
   }
 
+  function learnedRuleEntries() {
+    return Object.entries(runtimeRules.productManualMappings || {}).map(([source, rule]) => ({
+      source,
+      details: Array.isArray(rule?.details) ? rule.details : []
+    }));
+  }
+
+  function learnedRuleTargetText(details = []) {
+    return details.map(detail => `${detail.item}${Number(detail.quantity || 1) !== 1 ? ` × ${Number(detail.quantity || 1)}` : ""}`).join("、") || "未指定";
+  }
+
+  function renderLearningRules() {
+    const el = $("productionLearningRuleList");
+    const hint = $("productionLearningCountHint");
+    if (!el) return;
+    const keyword = (learningSearchTerm || "").trim().toLowerCase();
+    const all = learnedRuleEntries().sort((a, b) => a.source.localeCompare(b.source, "zh-Hant"));
+    const rows = keyword ? all.filter(row => `${row.source} ${learnedRuleTargetText(row.details)}`.toLowerCase().includes(keyword)) : all;
+    if (hint) hint.textContent = keyword ? `顯示 ${rows.length} / ${all.length} 筆規則` : `${all.length} 筆規則`;
+    if (!rows.length) {
+      el.innerHTML = `<div class="production-side-empty">${keyword ? "沒有符合搜尋的規則。" : "目前沒有永久學習規則。"}</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(row => `
+      <div class="production-learning-rule-row">
+        <div class="production-learning-rule-name">${escapeHtml(row.source)}</div>
+        <div class="arrow">→</div>
+        <div class="production-learning-rule-target">${escapeHtml(learnedRuleTargetText(row.details))}</div>
+        <button type="button" class="secondary small danger-text production-learning-delete-btn" data-source="${escapeHtml(row.source)}">取消永久記憶</button>
+      </div>`).join("");
+  }
+
+  function removeLearningRule(sourceName) {
+    const source = String(sourceName || "");
+    if (!source || !runtimeRules.productManualMappings?.[source]) return;
+    if (!confirm(`確定取消這筆永久記憶？\n\n${source} → ${learnedRuleTargetText(runtimeRules.productManualMappings[source].details)}\n\n只影響未來分析；目前畫面和既有庫存異動不會自動回復。`)) return;
+    delete runtimeRules.productManualMappings[source];
+    saveRuntimeRules();
+    renderLearningRules();
+    updateProductionStatus("已取消永久記憶；下次分析將重新依檔名判斷。", "done");
+  }
+
   function loadDemo() {
     $("productionFilenameInput").value = [
       "(P)名牌(黑)(x20)_ccariuss_1LL.ai",
@@ -1173,6 +1256,7 @@
       return;
     }
     const analysisLabel = mode === "range" ? `${startDate}~${endDate}` : (mode === "all" ? "全部日期" : dateValue);
+    const previousProductRows = lastAnalysis?.summary?.productRows || [];
     const thisAnalysis = analyze(entries, analysisLabel);
     thisAnalysis.mode = mode;
     thisAnalysis.filteredCount = entries.length;
@@ -1181,6 +1265,7 @@
     lastAnalysis.mode = "session";
     lastAnalysis.filteredCount = currentSession.records.length;
     lastAnalysis.rawCount = currentSession.records.length;
+    captureAnalysisChange(previousProductRows, lastAnalysis);
     renderSessionPanel();
     renderAnalysis(lastAnalysis);
     updateProductionStatus(`分析完成：本次讀取 ${entries.length} 個檔名，目前分析共 ${currentSession.records.length} 筆明細。`, "done");
@@ -1279,6 +1364,7 @@
     const target = prompt("要將這個商品整理為哪個名稱？\n例如：名牌(玫瑰金) → 名牌(玫瑰)", product);
     if (!target || target.trim() === product) return;
     // 「對應庫存品項」只影響目前工作階段，不建立永久規則。
+    const previousProductRows = lastAnalysis?.summary?.productRows || [];
     currentSession.records.forEach(record => {
       if (record.product === product) {
         record.originalProduct = record.product;
@@ -1287,6 +1373,7 @@
       }
     });
     lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+    captureAnalysisChange(previousProductRows, lastAnalysis);
     renderAnalysis(lastAnalysis);
   }
 
@@ -1391,6 +1478,17 @@
     };
     const title = $("productionProductPickerTitle");
     if (title) title.textContent = record.filename || record.product || "指定商品";
+    const existingRule = runtimeRules.productManualMappings?.[productionPickerState.originalName];
+    const existingRuleEl = $("productionProductPickerExistingRule");
+    if (existingRuleEl) {
+      if (existingRule) {
+        existingRuleEl.classList.remove("hidden");
+        existingRuleEl.innerHTML = `<strong>目前已有永久記憶</strong><div>${escapeHtml(productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消永久記憶</button>`;
+      } else {
+        existingRuleEl.classList.add("hidden");
+        existingRuleEl.innerHTML = "";
+      }
+    }
     const qty = $("productionProductPickerQty");
     if (qty) qty.value = String(record.countedQuantity || record.quantity || 1);
     const permanent = $("productionProductPickerPermanent");
@@ -1568,6 +1666,7 @@ ${record.filename}
     syncMode();
     renderSessionPanel();
     updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
+    renderLearningRules();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
     $("productionSessionList")?.addEventListener("click", handleSessionAction);
@@ -1602,6 +1701,7 @@ ${record.filename}
       }
       const permanent = !!$("productionProductPickerPermanent")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
+      const previousProductRows = lastAnalysis?.summary?.productRows || [];
       if (permanent) {
         runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { details: productionPickerState.details } };
       } else {
@@ -1615,12 +1715,43 @@ ${record.filename}
       });
       closeProductionProductPicker();
       lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      captureAnalysisChange(previousProductRows, lastAnalysis);
       renderAnalysis(lastAnalysis);
+      renderLearningRules();
       updateProductionStatus(permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
+    });
+    $("productionProductViewAllBtn")?.addEventListener("click", () => {
+      productViewMode = "all";
+      $("productionProductViewAllBtn")?.classList.add("is-active");
+      $("productionProductViewChangedBtn")?.classList.remove("is-active");
+      if (lastAnalysis) renderAnalysis(lastAnalysis);
+    });
+    $("productionProductViewChangedBtn")?.addEventListener("click", () => {
+      productViewMode = "changed";
+      $("productionProductViewChangedBtn")?.classList.add("is-active");
+      $("productionProductViewAllBtn")?.classList.remove("is-active");
+      if (lastAnalysis) renderAnalysis(lastAnalysis);
     });
     $("productionProductSearchInput")?.addEventListener("input", event => {
       productSearchTerm = event.target.value || "";
       if (lastAnalysis) renderAnalysis(lastAnalysis);
+    });
+    $("productionLearningSearchInput")?.addEventListener("input", event => {
+      learningSearchTerm = event.target.value || "";
+      renderLearningRules();
+    });
+    $("productionLearningRuleList")?.addEventListener("click", event => {
+      const btn = event.target.closest(".production-learning-delete-btn");
+      if (btn) removeLearningRule(btn.dataset.source || "");
+    });
+    $("productionProductPickerExistingRule")?.addEventListener("click", event => {
+      if (!event.target.closest("#productionPickerRemoveRuleBtn")) return;
+      removeLearningRule(productionPickerState.originalName);
+      const el = $("productionProductPickerExistingRule");
+      if (el) { el.classList.add("hidden"); el.innerHTML = ""; }
+      const permanent = $("productionProductPickerPermanent");
+      if (permanent) permanent.checked = false;
+      setProductionPickerMessage("已取消永久記憶；目前視窗仍可重新指定。", "done");
     });
     $("productionDemoBtn")?.addEventListener("click", loadDemo);
     $("productionClearBtn")?.addEventListener("click", () => {
