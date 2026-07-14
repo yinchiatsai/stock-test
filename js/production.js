@@ -1664,6 +1664,22 @@ ${record.filename}
     };
     modeInput?.addEventListener("change", syncMode);
     syncMode();
+
+    const folderInput = $("productionFileInput");
+    const folderText = $("productionSelectedFolderText");
+    folderInput?.addEventListener("change", () => {
+      const files = Array.from(folderInput.files || []);
+      if (!folderText) return;
+      if (!files.length) {
+        folderText.textContent = "尚未選擇資料夾";
+        return;
+      }
+      const firstPath = files[0].webkitRelativePath || files[0].name || "";
+      const rootFolder = firstPath.split("/")[0] || "已選擇資料夾";
+      folderText.textContent = `${rootFolder}｜${files.length} 個檔案`;
+      updateProductionStatus(`已選擇「${rootFolder}」，共 ${files.length} 個檔案。請按「分析所選資料夾」。`, "idle");
+    });
+
     renderSessionPanel();
     updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
     renderLearningRules();
@@ -1759,6 +1775,8 @@ ${record.filename}
       if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
+      const folderText = $("productionSelectedFolderText");
+      if (folderText) folderText.textContent = "尚未選擇資料夾";
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
       updateProductionStatus("已清除已選資料夾/輸入欄位；目前分析結果仍保留。", "idle");
@@ -1769,6 +1787,8 @@ ${record.filename}
       if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
+      const folderText = $("productionSelectedFolderText");
+      if (folderText) folderText.textContent = "尚未選擇資料夾";
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
       resetSession();
