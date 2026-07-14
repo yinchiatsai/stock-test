@@ -1085,3 +1085,17 @@ body.is-logged-in header{
   font-weight: 700;
 }
 .modal-inline-error[hidden] { display: none !important; }
+
+/* V3.14：導覽列維持固定寬度，不受生產分析寬版內容影響 */
+.tabs{
+  width:min(100%,1180px);
+  margin-left:auto;
+  margin-right:auto;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+main:has(#production:not(.hidden)) > .tabs{
+  width:min(calc(100vw - 32px),1180px);
+}
+@media(max-width:900px){
+  .tabs{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
