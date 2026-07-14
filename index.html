@@ -80,9 +80,9 @@
         <div>
           <p class="production-kicker">Production Center</p>
           <h2>📊 生產分析中心</h2>
-          <p class="production-subtitle">選擇資料夾後直接分析；可連續加入多個製程或多天資料夾，系統會保留目前分析進度。</p>
+          <p class="production-subtitle">選擇資料夾並分析；新增或數量變動的品項會優先顯示。</p>
         </div>
-        <span class="badge info production-version-badge">V3.13 流程整理版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V3.14 介面與智慧規則管理版：只分析，不扣庫存</span>
       </div>
 
       <div class="production-dashboard-grid">
@@ -90,7 +90,7 @@
           <div class="production-card-head">
             <div>
               <h3>建立分析</h3>
-              <p class="note">選擇要分析的日期資料夾或製程資料夾。按下分析後，結果會加入「目前分析」，不會覆蓋其他製程。</p>
+              <p class="note">選擇日期或製程資料夾後直接分析；不同製程會加入同一工作階段。</p>
             </div>
           </div>
 
@@ -170,6 +170,10 @@
         </div>
         <div class="production-product-toolbar">
           <input id="productionProductSearchInput" placeholder="搜尋商品使用量，例如：名牌、軍牌、USB" />
+          <div class="production-product-view-switch" role="group" aria-label="商品顯示範圍">
+            <button id="productionProductViewAllBtn" type="button" class="secondary small is-active">全部</button>
+            <button id="productionProductViewChangedBtn" type="button" class="secondary small">本次異動</button>
+          </div>
           <span id="productionProductCountHint">尚未分析</span>
         </div>
         <div class="production-product-inspector-layout">
@@ -202,6 +206,20 @@
           <div id="productionProcessResult" class="production-table-wrap">尚未分析</div>
         </div>
       </div>
+
+      <details class="production-section-card card production-learning-section">
+        <summary class="production-detail-summary">
+          <span>智慧學習規則</span>
+          <small>管理「永久記住」的商品指定；刪除後只影響未來分析。</small>
+        </summary>
+        <div class="production-learning-toolbar">
+          <input id="productionLearningSearchInput" placeholder="搜尋解析名稱或庫存品項" />
+          <span id="productionLearningCountHint">0 筆規則</span>
+        </div>
+        <div id="productionLearningRuleList" class="production-learning-rule-list">
+          <div class="production-side-empty">目前沒有永久學習規則。</div>
+        </div>
+      </details>
 
       <details id="productionDetailSection" class="production-section-card card production-detail-section">
         <summary class="production-detail-summary">
@@ -694,6 +712,7 @@
           <div class="form-hint">點選左側搜尋結果後，會加入下方清單；原解析名稱不會自動加入。</div>
         </div>
       </div>
+      <div id="productionProductPickerExistingRule" class="production-picker-existing-rule hidden"></div>
       <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
       <div class="production-picker-list-title">已指定庫存品項</div>
       <div id="productionProductPickerList" class="production-picker-list"></div>
