@@ -100,13 +100,76 @@ main:has(#production:not(.hidden)) {
   margin-top: 14px;
 }
 
-.production-folder-field input[type="file"] {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 13px;
+.production-folder-picker {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
   border: 1px dashed rgba(62, 96, 102, 0.38);
   border-radius: 14px;
   background: #f8fbfa;
+  box-sizing: border-box;
+}
+
+.production-folder-native-input {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.production-folder-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(62, 96, 102, 0.28);
+  border-radius: 11px;
+  background: #fff;
+  color: #27484e;
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+}
+
+.production-folder-button:hover {
+  background: #eef5f4;
+}
+
+.production-folder-button:focus-visible {
+  outline: 3px solid rgba(62, 96, 102, 0.2);
+  outline-offset: 2px;
+}
+
+.production-folder-selection {
+  min-width: 0;
+  color: #718489;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .production-folder-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .production-folder-button {
+    width: 100%;
+  }
+  .production-folder-selection {
+    padding: 2px 4px;
+    white-space: normal;
+  }
 }
 
 .production-help-box {
