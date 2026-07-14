@@ -120,7 +120,11 @@
           <div class="production-folder-panel">
             <div class="field production-folder-field">
               <label>選擇資料夾</label>
-              <input id="productionFileInput" type="file" multiple webkitdirectory directory />
+              <div class="production-folder-picker">
+                <input id="productionFileInput" class="production-folder-native-input" type="file" multiple webkitdirectory directory />
+                <label for="productionFileInput" id="productionChooseFolderBtn" class="production-folder-button">選擇資料夾</label>
+                <span id="productionSelectedFolderText" class="production-folder-selection">尚未選擇資料夾</span>
+              </div>
             </div>
             <div class="field production-process-field">
               <label>製程名稱（選日期資料夾時可填）</label>
