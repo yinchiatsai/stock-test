@@ -732,7 +732,11 @@
         </div>
         <div class="production-picker-side">
           <div class="field">
-            <label>加入數量</label>
+            <label>本檔計入數量（可修正）</label>
+            <input id="productionProductPickerParsedQty" type="number" min="1" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label>加入庫存品項數量</label>
             <input id="productionProductPickerQty" type="number" min="1" step="1" value="1" />
           </div>
           <div class="form-hint">點選左側搜尋結果後，會加入下方清單；原解析名稱不會自動加入。</div>
@@ -742,10 +746,20 @@
       <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
       <div class="production-picker-list-title">已指定庫存品項</div>
       <div id="productionProductPickerList" class="production-picker-list"></div>
-      <label class="check-field production-picker-check">
-        <input type="checkbox" id="productionProductPickerPermanent" checked />
-        <span>永久記住此解析名稱的指定方式</span>
-      </label>
+      <div class="production-picker-options">
+        <label class="check-field production-picker-check hidden" id="productionProductPickerBatchBox">
+          <input type="checkbox" id="productionProductPickerBatch" />
+          <span>套用同組全部檔案</span>
+        </label>
+        <label class="check-field production-picker-check stats-only-check">
+          <input type="checkbox" id="productionProductPickerStatsOnly" />
+          <span><strong>僅統計，不扣庫存</strong><small>適合壓克力吊飾、立牌、木板、立體字等板材加工品</small></span>
+        </label>
+        <label class="check-field production-picker-check">
+          <input type="checkbox" id="productionProductPickerPermanent" checked />
+          <span>永久記住此解析名稱的指定方式</span>
+        </label>
+      </div>
       <div class="modal-actions">
         <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
         <button id="productionProductPickerSaveBtn" type="button">套用指定</button>
