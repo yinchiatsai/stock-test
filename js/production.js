@@ -992,6 +992,8 @@
     });
     const exportBtn = $("productionExportCsvBtn");
     if (exportBtn) exportBtn.disabled = true;
+    setProductionFlowState(null);
+    renderDeductPreview(null);
     updateProductionStatus("目前畫面已清空；此版本只清除瀏覽器畫面，沒有寫入庫存，也沒有雲端留存。", "idle");
   }
 
@@ -1038,6 +1040,66 @@
     return Array.from(new Set(vars)).join("、");
   }
 
+  function normalizeInventoryName(value) {
+    return String(value || "")
+      .trim()
+      .replace(/[（]/g, "(")
+      .replace(/[）]/g, ")")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+  }
+
+  function inventoryNameMap() {
+    const map = new Map();
+    getInventoryProductOptions().forEach(name => {
+      const key = normalizeInventoryName(name);
+      if (key && !map.has(key)) map.set(key, name);
+    });
+    return map;
+  }
+
+  function recordInventoryMapping(record, productName) {
+    const inv = inventoryNameMap();
+    const rawDetails = (record?.stockDetails || []).filter(d => Number(d.quantity || 0) > 0 && (!productName || d.item === productName || splitStockItemName(d.item).base === productName));
+    const details = rawDetails.length ? rawDetails : (record?.product === productName && Number(record?.countedQuantity || 0) > 0 ? [{ item: record.product, quantity: record.countedQuantity, unit: record.unit || "件", note: "解析商品" }] : []);
+    const mapped = [];
+    const unmapped = [];
+    details.forEach(detail => {
+      const official = inv.get(normalizeInventoryName(detail.item));
+      const row = { ...detail, officialName: official || "" };
+      if (official) mapped.push(row);
+      else unmapped.push(row);
+    });
+    return { mapped, unmapped, details };
+  }
+
+  function productInventoryMappingStatus(productName) {
+    const rows = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, productName));
+    const allMapped = [];
+    const allUnmapped = [];
+    rows.forEach(record => {
+      const state = recordInventoryMapping(record, productName);
+      allMapped.push(...state.mapped);
+      allUnmapped.push(...state.unmapped);
+    });
+    const unique = values => Array.from(new Set(values.filter(Boolean)));
+    const mappedNames = unique(allMapped.map(d => d.officialName || d.item));
+    const unmappedNames = unique(allUnmapped.map(d => d.item));
+    const status = allUnmapped.length === 0 && allMapped.length > 0 ? "mapped" : allMapped.length > 0 ? "partial" : "unmapped";
+    return { status, mappedNames, unmappedNames, mappedCount: allMapped.length, unmappedCount: allUnmapped.length };
+  }
+
+  function mappingStatusHtml(productName) {
+    const state = productInventoryMappingStatus(productName);
+    if (state.status === "mapped") {
+      return `<span class="production-map-badge is-mapped">✓ 已對應</span>${state.mappedNames.length ? `<div class="production-map-target">${escapeHtml(state.mappedNames.join("、"))}</div>` : ""}`;
+    }
+    if (state.status === "partial") {
+      return `<span class="production-map-badge is-partial">⚠ 部分對應</span><div class="production-map-target">待處理：${escapeHtml(state.unmappedNames.join("、") || "尚有未對應品項")}</div>`;
+    }
+    return `<span class="production-map-badge is-unmapped">⚠ 尚未對應</span>${state.unmappedNames.length ? `<div class="production-map-target">解析：${escapeHtml(state.unmappedNames.join("、"))}</div>` : ""}`;
+  }
+
   function renderProductDetailPanel(productName) {
     const el = $("productionProductDetailPanel");
     if (!el) return;
@@ -1068,8 +1130,16 @@
             </div>
             <div class="production-side-file">${escapeHtml(r.filename)}</div>
             <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
+            ${(() => {
+              const mapState = recordInventoryMapping(r, productName);
+              const mapped = mapState.mapped.map(d => d.officialName || d.item);
+              const unmapped = mapState.unmapped.map(d => d.item);
+              if (!mapState.details.length) return `<div class="production-side-map is-unmapped"><strong>⚠ 尚未對應庫存</strong><span>此筆目前沒有可扣料的庫存品項。</span></div>`;
+              if (!unmapped.length) return `<div class="production-side-map is-mapped"><strong>✓ 已對應庫存</strong><span>${escapeHtml(Array.from(new Set(mapped)).join("、"))}</span></div>`;
+              return `<div class="production-side-map is-unmapped"><strong>⚠ 尚未完整對應</strong><span>${escapeHtml(Array.from(new Set(unmapped)).join("、"))}</span></div>`;
+            })()}
             <div class="production-side-actions">
-              <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">指定商品</button>
+              <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">${recordInventoryMapping(r, productName).unmapped.length ? "指定庫存商品" : "重新指定"}</button>
               <button type="button" class="secondary small danger-text production-record-remove-btn" data-key="${escapeHtml(r.path || r.filename)}">移除此檔</button>
             </div>
           </div>
@@ -1104,8 +1174,56 @@
     return buttons.join(" ") || "請依建議修正檔名後重新分析";
   }
 
+  function setProductionFlowState(analysis) {
+    const analyzeStep = document.querySelector('.production-flow-step[data-step="analyze"]');
+    const reviewStep = document.querySelector('.production-flow-step[data-step="review"]');
+    const deductStep = document.querySelector('.production-flow-step[data-step="deduct"]');
+    [analyzeStep, reviewStep, deductStep].forEach(el => el?.classList.remove('is-active','is-done'));
+    if (!analysis || !analysis.records?.length) { analyzeStep?.classList.add('is-active'); return; }
+    analyzeStep?.classList.add('is-done');
+    const hasIssues = (analysis.summary?.issues || []).length > 0;
+    const hasUnmapped = (analysis.summary?.productRows || []).some(row => productInventoryMappingStatus(row.name).status !== "mapped");
+    if (hasIssues || hasUnmapped) reviewStep?.classList.add('is-active');
+    else { reviewStep?.classList.add('is-done'); deductStep?.classList.add('is-active'); }
+  }
+
+  function renderDeductPreview(analysis) {
+    const box = $('productionDeductPreview');
+    const totals = $('productionDeductTotals');
+    const badge = $('productionDeductReadyBadge');
+    if (!box || !totals || !badge) return;
+    const rows = analysis?.summary?.productRows || [];
+    const issueProducts = new Set((analysis?.summary?.issues || []).map(i => i.product));
+    if (!rows.length) {
+      box.className = 'production-deduct-preview-empty';
+      box.textContent = '完成分析後會顯示預計扣除的庫存品項。';
+      totals.textContent = '';
+      badge.className = 'production-preview-badge is-idle';
+      badge.textContent = '尚未分析';
+      return;
+    }
+    box.className = 'production-deduct-list';
+    let unmappedProducts = 0;
+    box.innerHTML = rows.map(row => {
+      const mapping = productInventoryMappingStatus(row.name);
+      const warning = issueProducts.has(row.name);
+      const mappingWarning = mapping.status !== "mapped";
+      if (mappingWarning) unmappedProducts += 1;
+      const statusText = mappingWarning ? "待對應" : warning ? "待確認" : "可扣減";
+      return `<div class="production-deduct-row"><strong>${escapeHtml(row.name)}</strong><span class="production-deduct-qty">-${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}</span><span class="production-deduct-status ${(warning || mappingWarning) ? 'is-warning' : ''}">${statusText}</span></div>`;
+    }).join('');
+    const totalQty = rows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
+    totals.textContent = `預計扣除 ${rows.length} 個品項，共 ${totalQty} 件`;
+    const issueCount = (analysis.summary?.issues || []).length;
+    const hasIssues = issueCount > 0 || unmappedProducts > 0;
+    badge.className = `production-preview-badge ${hasIssues ? 'is-warning' : 'is-ready'}`;
+    badge.textContent = unmappedProducts > 0 ? `尚有 ${unmappedProducts} 個商品待對應庫存` : issueCount > 0 ? `尚有 ${issueCount} 筆待確認` : '已可進入扣庫存預覽';
+  }
+
   function renderAnalysis(analysis) {
     renderSummary(analysis);
+    setProductionFlowState(analysis);
+    renderDeductPreview(analysis);
     const productRowsAll = (analysis.summary.productRows || []).map(row => {
       const change = lastProductChanges.get(row.name) || null;
       return { ...row, _change: change, _rowClass: change ? "production-changed-row" : "" };
@@ -1118,8 +1236,15 @@
     if (keyword) productRows = productRows.filter(row => String(row.name || "").toLowerCase().includes(keyword));
     const productCountHint = $("productionProductCountHint");
     if (productCountHint) {
+      const mappingStats = productRowsAll.reduce((acc, row) => {
+        const status = productInventoryMappingStatus(row.name).status;
+        if (status === "mapped") acc.mapped += 1;
+        else acc.unmapped += 1;
+        return acc;
+      }, { mapped: 0, unmapped: 0 });
       const scope = productViewMode === "changed" ? `本次異動 ${lastProductChanges.size} 項` : `共 ${productRowsAll.length} 項`;
-      productCountHint.textContent = keyword ? `${scope}｜搜尋顯示 ${productRows.length} 項` : scope;
+      const mappingText = `已對應 ${mappingStats.mapped}｜待對應 ${mappingStats.unmapped}`;
+      productCountHint.textContent = keyword ? `${scope}｜${mappingText}｜搜尋顯示 ${productRows.length} 項` : `${scope}｜${mappingText}`;
     }
     if (selectedProductName && !productRowsAll.some(row => row.name === selectedProductName)) selectedProductName = "";
     renderSimpleTable($("productionProductResult"), productRows, [
@@ -1133,7 +1258,11 @@
       } },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
-      { label: "操作", html: true, render: row => `<button type="button" class="secondary small production-alias-btn" data-product="${escapeHtml(row.name)}">對應庫存品項</button>` }
+      { label: "庫存對應", html: true, render: row => mappingStatusHtml(row.name) },
+      { label: "操作", html: true, render: row => {
+        const state = productInventoryMappingStatus(row.name);
+        return `<button type="button" class="secondary small production-product-map-btn" data-product="${escapeHtml(row.name)}">${state.status === "mapped" ? "檢查對應" : "立即對應"}</button>`;
+      } }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
     renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
@@ -1353,6 +1482,24 @@
     selectedProductName = btn.dataset.product || "";
     renderProductDetailPanel(selectedProductName);
     document.querySelectorAll(".production-product-select-btn").forEach(b => b.classList.toggle("is-active", b.dataset.product === selectedProductName));
+    return true;
+  }
+
+  function handleProductMapAction(event) {
+    const btn = event.target.closest(".production-product-map-btn");
+    if (!btn) return false;
+    const product = btn.dataset.product || "";
+    if (!product) return true;
+    selectedProductName = product;
+    renderProductDetailPanel(product);
+    document.querySelectorAll(".production-product-select-btn").forEach(b => b.classList.toggle("is-active", b.dataset.product === product));
+    const records = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, product));
+    const firstUnmapped = records.find(r => recordInventoryMapping(r, product).unmapped.length > 0);
+    if (firstUnmapped) {
+      openProductionProductPicker(firstUnmapped);
+    } else {
+      $("productionProductDetailPanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
     return true;
   }
 
@@ -1681,6 +1828,8 @@ ${record.filename}
     });
 
     renderSessionPanel();
+    setProductionFlowState(lastAnalysis);
+    renderDeductPreview(lastAnalysis);
     updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
     renderLearningRules();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
@@ -1688,6 +1837,7 @@ ${record.filename}
     $("productionSessionList")?.addEventListener("click", handleSessionAction);
     $("productionProductResult")?.addEventListener("click", event => {
       if (handleProductSelectAction(event)) return;
+      if (handleProductMapAction(event)) return;
       handleProductAliasAction(event);
     });
     $("productionProductDetailPanel")?.addEventListener("click", handleRecordProductAction);
@@ -1780,18 +1930,6 @@ ${record.filename}
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
       updateProductionStatus("已清除已選資料夾/輸入欄位；目前分析結果仍保留。", "idle");
-    });
-    $("productionNewSessionBtn")?.addEventListener("click", () => {
-      if (currentSession.records.length && !confirm("確定要開始新的分析？這會清除目前畫面上的分析結果；目前版本尚未寫入庫存，也不會刪除任何正式資料。")) return;
-      const textarea = $("productionFilenameInput");
-      if (textarea) textarea.value = "";
-      const fileInput = $("productionFileInput");
-      if (fileInput) fileInput.value = "";
-      const folderText = $("productionSelectedFolderText");
-      if (folderText) folderText.textContent = "尚未選擇資料夾";
-      const processInput = $("productionProcessInput");
-      if (processInput) processInput.value = "";
-      resetSession();
     });
     $("productionExportCsvBtn")?.addEventListener("click", exportCsv);
     $("productionSingleTestBtn")?.addEventListener("click", singleTest);
