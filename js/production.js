@@ -23,10 +23,10 @@
   function loadRuntimeRules() {
     try {
       const raw = localStorage.getItem(RULE_STORAGE_KEY);
-      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {} };
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, ...JSON.parse(raw) };
+      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {}, ...JSON.parse(raw) };
     } catch (error) {
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {} };
     }
   }
 
@@ -623,6 +623,12 @@
   }
 
   function applyManualItem(record) {
+    if ((runtimeRules.statsOnlyProducts || {})[record.originalParsedProduct] || (runtimeRules.statsOnlyProducts || {})[record.product]) {
+      record.statsOnly = true;
+      record.stockDetails = [];
+      record.manualNote = "永久僅統計";
+      return record;
+    }
     const manual = runtimeRules.manualItems?.[record.path] || runtimeRules.manualItems?.[record.filename];
     const learned = runtimeRules.productManualMappings?.[record.originalParsedProduct] || runtimeRules.productManualMappings?.[record.product];
     const rule = manual || learned;
@@ -770,7 +776,8 @@
     const groups = new Map();
     records.forEach(record => {
       if (!record.productionAttribute || !record.productionAttributeFamily || record.folderPriority) return;
-      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${record.quantity}|${record.identity}|${record.productionAttributeFamily}`;
+      const mergeIdentity = removeProductionAttributesForIdentity(record.identity || stripExtension(record.filename)).replace(/(?:^|[_-])(正|背|反|正面|背面|反面|白|彩|白檔|彩檔|底白|底色|鏡彩|正彩|內|外)(?=$|[_-])/g, "").replace(/[_-]{2,}/g, "_").replace(/^[_-]+|[_-]+$/g, "");
+      const key = `${record.date}|${record.process}|${record.product}|${record.quantity}|${mergeIdentity}|${record.productionAttributeFamily}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(record);
     });
@@ -1089,7 +1096,23 @@
     return { status, mappedNames, unmappedNames, mappedCount: allMapped.length, unmappedCount: allUnmapped.length };
   }
 
+  function isStatsOnlyProduct(productName) {
+    const key = String(productName || "").trim();
+    if (!!(runtimeRules.statsOnlyProducts || {})[key]) return true;
+    return currentSession.records.some(r => r.statsOnly && (r.product === key || r.originalParsedProduct === key));
+  }
+
+  function setStatsOnlyProduct(productName, enabled = true) {
+    const key = String(productName || "").trim();
+    if (!key) return;
+    runtimeRules.statsOnlyProducts = { ...(runtimeRules.statsOnlyProducts || {}) };
+    if (enabled) runtimeRules.statsOnlyProducts[key] = true;
+    else delete runtimeRules.statsOnlyProducts[key];
+    saveRuntimeRules();
+  }
+
   function mappingStatusHtml(productName) {
+    if (isStatsOnlyProduct(productName)) return `<span class="production-map-badge is-stats-only">◎ 僅統計</span><div class="production-map-target">不參與庫存扣減</div>`;
     const state = productInventoryMappingStatus(productName);
     if (state.status === "mapped") {
       return `<span class="production-map-badge is-mapped">✓ 已對應</span>${state.mappedNames.length ? `<div class="production-map-target">${escapeHtml(state.mappedNames.join("、"))}</div>` : ""}`;
@@ -1525,7 +1548,23 @@
   }
 
 
-  let productionPickerState = { recordKey: "", originalName: "", details: [] };
+  let productionPickerState = { recordKey: "", originalName: "", details: [], groupKeys: [], mode: "inventory" };
+
+  function batchPatternKey(record) {
+    const base = stripExtension(record?.filename || "");
+    return base
+      .replace(/([_-]?資料組[ _-]*)?\d+$/i, "$1#")
+      .replace(/([_-])\d+([_-])/g, "$1#$2")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sameBatchRecords(record) {
+    if (!record) return [];
+    const key = batchPatternKey(record);
+    const rows = currentSession.records.filter(r => batchPatternKey(r) === key && r.date === record.date && r.process === record.process);
+    return rows.length > 1 ? rows : [record];
+  }
 
   function getInventoryProductOptions() {
     try {
@@ -1615,6 +1654,8 @@
     productionPickerState = {
       recordKey: key,
       originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
+      groupKeys: sameBatchRecords(record).map(r => r.path || r.filename),
+      mode: isStatsOnlyProduct(record.product) ? "stats" : "inventory",
       details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
         quantity: Number(d.quantity || record.countedQuantity || 1),
@@ -1638,6 +1679,19 @@
     }
     const qty = $("productionProductPickerQty");
     if (qty) qty.value = String(record.countedQuantity || record.quantity || 1);
+    const parsedQty = $("productionProductPickerParsedQty");
+    if (parsedQty) parsedQty.value = String(record.countedQuantity || record.quantity || 1);
+    const batchBox = $("productionProductPickerBatchBox");
+    const batchCheck = $("productionProductPickerBatch");
+    if (batchBox) {
+      const count = productionPickerState.groupKeys.length;
+      batchBox.classList.toggle("hidden", count <= 1);
+      const label = batchBox.querySelector("span");
+      if (label) label.textContent = `套用同組全部 ${count} 個檔案`;
+    }
+    if (batchCheck) batchCheck.checked = productionPickerState.groupKeys.length > 1;
+    const statsCheck = $("productionProductPickerStatsOnly");
+    if (statsCheck) statsCheck.checked = productionPickerState.mode === "stats";
     const permanent = $("productionProductPickerPermanent");
     if (permanent) permanent.checked = true;
     renderProductionPickerList();
@@ -1883,30 +1937,52 @@ ${record.filename}
     $("productionProductPickerSaveBtn")?.addEventListener("click", () => {
       const record = currentSession.records.find(r => (r.path || r.filename) === productionPickerState.recordKey);
       if (!record) return;
-      if (!productionPickerState.details.length) {
-        setProductionPickerMessage("請至少加入一個庫存品項。", "error");
+      const statsOnly = !!$("productionProductPickerStatsOnly")?.checked;
+      if (!statsOnly && !productionPickerState.details.length) {
+        setProductionPickerMessage("請至少加入一個庫存品項，或選擇『僅統計，不扣庫存』。", "error");
+        return;
+      }
+      const correctedQty = Number($("productionProductPickerParsedQty")?.value || record.countedQuantity || record.quantity || 1);
+      if (!Number.isFinite(correctedQty) || correctedQty <= 0) {
+        setProductionPickerMessage("請輸入正確的本次計入數量。", "error");
         return;
       }
       const permanent = !!$("productionProductPickerPermanent")?.checked;
+      const batch = !!$("productionProductPickerBatch")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
       const previousProductRows = lastAnalysis?.summary?.productRows || [];
-      if (permanent) {
+      const targetKeys = new Set(batch ? productionPickerState.groupKeys : [productionPickerState.recordKey]);
+      if (statsOnly) {
+        setStatsOnlyProduct(originalName, permanent);
+      } else if (permanent) {
         runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { details: productionPickerState.details } };
-      } else {
-        runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
+        setStatsOnlyProduct(originalName, false);
       }
-      saveRuntimeRules();
       currentSession.records.forEach(r => {
-        const sameRecord = (r.path || r.filename) === productionPickerState.recordKey;
-        const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
-        if (sameRecord || sameLearnedName) applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
+        const key = r.path || r.filename;
+        const sameRecord = targetKeys.has(key);
+        const sameLearnedName = permanent && !batch && (r.originalParsedProduct === originalName || r.product === originalName);
+        if (!(sameRecord || sameLearnedName)) return;
+        if (statsOnly) {
+          r.statsOnly = true;
+          r.stockDetails = [];
+          r.quantity = correctedQty;
+          r.countedQuantity = correctedQty;
+          r.manualNote = permanent ? "永久僅統計" : "本次僅統計";
+        } else {
+          const details = productionPickerState.details.map(d => ({ ...d }));
+          if (details.length === 1) details[0].quantity = correctedQty;
+          applyStockDetailsToRecord(r, details, permanent ? "永久指定" : "本次指定");
+          if (!permanent) runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [key]: { details } };
+        }
       });
+      saveRuntimeRules();
       closeProductionProductPicker();
       lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
       captureAnalysisChange(previousProductRows, lastAnalysis);
       renderAnalysis(lastAnalysis);
       renderLearningRules();
-      updateProductionStatus(permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
+      updateProductionStatus(statsOnly ? (permanent ? "已永久設為僅統計，不參與庫存扣減。" : "本次已設為僅統計。") : batch ? `已批次套用 ${productionPickerState.groupKeys.length} 個同組檔案。` : permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
     });
     $("productionProductViewAllBtn")?.addEventListener("click", () => {
       productViewMode = "all";
