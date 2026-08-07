@@ -75,14 +75,22 @@
 
 
     <!-- 生產分析 -->
-    <section id="production" class="tab-panel hidden production-center">
+    <section id="production" class="tab-panel hidden production-center production-ux-v317">
       <div class="production-page-head">
         <div>
           <p class="production-kicker">Production Center</p>
           <h2>📊 生產分析中心</h2>
           <p class="production-subtitle">選擇資料夾並分析；新增或數量變動的品項會優先顯示。</p>
         </div>
-        <span class="badge info production-version-badge">V3.14 介面與智慧規則管理版：只分析，不扣庫存</span>
+        <span class="badge info production-version-badge">V3.17 工作流程介面版：只預覽，不實際扣庫存</span>
+      </div>
+
+      <div class="production-flow-strip" aria-label="生產分析流程">
+        <div class="production-flow-step is-active" data-step="analyze"><span>1</span><strong>分析</strong><small>讀取資料夾與檔名</small></div>
+        <div class="production-flow-line"></div>
+        <div class="production-flow-step" data-step="review"><span>2</span><strong>確認</strong><small>核對品項與待確認事項</small></div>
+        <div class="production-flow-line"></div>
+        <div class="production-flow-step" data-step="deduct"><span>3</span><strong>扣庫存</strong><small>目前僅提供預覽</small></div>
       </div>
 
       <div class="production-dashboard-grid">
@@ -90,11 +98,11 @@
           <div class="production-card-head">
             <div>
               <h3>建立分析</h3>
-              <p class="note">選擇日期或製程資料夾後直接分析；不同製程會加入同一工作階段。</p>
+              <p class="note">選好日期、資料夾與製程後開始分析。</p>
             </div>
           </div>
 
-          <div class="production-control-grid">
+          <div class="production-control-grid production-control-grid-compact">
             <div class="field">
               <label>分析模式</label>
               <select id="productionModeInput">
@@ -115,9 +123,13 @@
               <label>結束日期</label>
               <input id="productionEndDateInput" type="date" />
             </div>
+            <div class="field production-process-field">
+              <label>製程名稱 <small>（選日期資料夾時填）</small></label>
+              <input id="productionProcessInput" placeholder="例如：金屬、彩印" />
+            </div>
           </div>
 
-          <div class="production-folder-panel">
+          <div class="production-folder-panel production-folder-panel-compact">
             <div class="field production-folder-field">
               <label>選擇資料夾</label>
               <div class="production-folder-picker">
@@ -126,21 +138,16 @@
                 <span id="productionSelectedFolderText" class="production-folder-selection">尚未選擇資料夾</span>
               </div>
             </div>
-            <div class="field production-process-field">
-              <label>製程名稱（選日期資料夾時可填）</label>
-              <input id="productionProcessInput" placeholder="例如：金屬製作檔、彩印製作檔" />
-            </div>
           </div>
 
           <details class="production-help-box">
-            <summary>操作說明</summary>
+            <summary>使用說明</summary>
             <p>如果選的是「金屬製作檔」這層，系統會依日期資料夾判斷製程；如果直接選「2026-07-07」日期資料夾，建議填寫製程名稱。</p>
             <p>網頁版只讀檔名，不讀檔案內容；副檔名不影響分析。</p>
           </details>
 
           <div class="production-actions production-actions-primary">
             <button id="productionAnalyzeBtn" type="button">分析所選資料夾</button>
-            <button id="productionNewSessionBtn" class="secondary" type="button">開始新的分析（清除目前分析）</button>
             <button id="productionClearBtn" class="secondary" type="button">清除已選資料夾</button>
             <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
           </div>
@@ -151,7 +158,7 @@
           <div class="production-card-head">
             <div>
               <h3>今日分析摘要</h3>
-              <p class="note">分析完成後會自動更新。</p>
+              
             </div>
           </div>
           <div id="productionSummaryCards" class="production-summary-grid production-summary-grid-dashboard">
@@ -194,6 +201,21 @@
           <span class="production-section-hint">待確認項目仍會列入本次分析統計；目前安全版不會寫入庫存，正式扣庫存前建議先完成確認。</span>
         </div>
         <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
+      </section>
+
+      <section class="production-section-card card production-deduct-preview-section">
+        <div class="production-section-title-row">
+          <div>
+            <h3>待扣庫存預覽</h3>
+            <span class="production-section-hint">此區目前只顯示預計扣減內容，不會寫入實際庫存。</span>
+          </div>
+          <span id="productionDeductReadyBadge" class="production-preview-badge is-idle">尚未分析</span>
+        </div>
+        <div id="productionDeductPreview" class="production-deduct-preview-empty">完成分析後會顯示預計扣除的庫存品項。</div>
+        <div class="production-deduct-footer">
+          <div id="productionDeductTotals" class="production-deduct-totals"></div>
+          <button id="productionConfirmDeductBtn" type="button" disabled title="此版本尚未啟用實際扣庫存">確認扣庫存（尚未啟用）</button>
+        </div>
       </section>
 
       <div class="production-result-grid production-result-grid-dashboard production-compact-stats">
