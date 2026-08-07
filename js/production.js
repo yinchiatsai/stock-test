@@ -1874,6 +1874,8 @@ ${record.filename}
 
   function init() {
     if (!$("production")) return;
+    // V3.20.1: ensure the V3.17+ compact UI stylesheet scope is active even when index.html is an older compatible version.
+    $("production").classList.add("production-center", "production-ux-v317");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production *").forEach(el => {
       if (el.children.length === 0 && /V3\.17 工作流程介面版/.test(el.textContent || "")) {
