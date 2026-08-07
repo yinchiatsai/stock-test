@@ -1,1212 +1,790 @@
-main:has(#production:not(.hidden)) {
-  max-width: 1520px;
-}
-
-/* Golden Bird Production Center - V2 Dashboard UI */
-#production.production-center {
-  width: min(96vw, 1480px);
-  max-width: none;
-  margin: 0 auto;
-}
-
-.production-page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin: 18px 0 18px;
-}
-
-.production-page-head h2 {
-  margin: 0;
-  font-size: clamp(24px, 2.3vw, 34px);
-  color: #233e43;
-}
-
-.production-kicker {
-  margin: 0 0 4px;
-  color: #7f9599;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.production-subtitle {
-  margin: 8px 0 0;
-  color: #6f8589;
-  line-height: 1.6;
-}
-
-.production-version-badge {
-  white-space: nowrap;
-  margin-top: 6px;
-}
-
-.production-dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: 18px;
-  align-items: stretch;
-  margin-bottom: 18px;
-}
-
-.production-card,
-.production-section-card,
-.production-summary-panel,
-.production-result-grid > .card {
-  border-radius: 22px;
-  border: 1px solid rgba(62, 96, 102, 0.12);
-  box-shadow: 0 18px 42px rgba(26, 56, 61, 0.08);
-}
-
-.production-control-card,
-.production-summary-panel {
-  min-height: 100%;
-}
-
-.production-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.production-card-head h3,
-.production-section-title-row h3,
-.production-result-grid h3 {
-  margin: 0 0 6px;
-  color: #243f45;
-  font-size: 22px;
-}
-
-.production-control-grid {
-  display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(220px, 1fr) minmax(220px, 1fr);
-  gap: 14px;
-  align-items: end;
-}
-
-.production-date-single {
-  grid-column: span 2;
-}
-
-.production-folder-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
-  gap: 14px;
-  align-items: end;
-  margin-top: 14px;
-}
-
-.production-folder-picker {
-  min-height: 54px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  border: 1px dashed rgba(62, 96, 102, 0.38);
-  border-radius: 14px;
-  background: #f8fbfa;
-  box-sizing: border-box;
-}
-
-.production-folder-native-input {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-}
-
-.production-folder-button {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid rgba(62, 96, 102, 0.28);
-  border-radius: 11px;
-  background: #fff;
-  color: #27484e;
-  font-weight: 800;
-  cursor: pointer;
-  user-select: none;
-}
-
-.production-folder-button:hover {
-  background: #eef5f4;
-}
-
-.production-folder-button:focus-visible {
-  outline: 3px solid rgba(62, 96, 102, 0.2);
-  outline-offset: 2px;
-}
-
-.production-folder-selection {
-  min-width: 0;
-  color: #718489;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 640px) {
-  .production-folder-picker {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .production-folder-button {
-    width: 100%;
-  }
-  .production-folder-selection {
-    padding: 2px 4px;
-    white-space: normal;
-  }
-}
-
-.production-help-box {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #fbf6ea;
-  color: #718489;
-  line-height: 1.65;
-}
-
-.production-help-box summary {
-  cursor: pointer;
-  font-weight: 800;
-  color: #3e6066;
-}
-
-.production-help-box p {
-  margin: 8px 0 0;
-}
-
-.production-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 16px;
-}
-
-.production-actions-primary button:first-child {
-  min-width: 150px;
-  font-weight: 900;
-}
-
-.production-summary-panel {
-  position: sticky;
-  top: 90px;
-}
-
-.production-summary-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.production-summary-grid-dashboard {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.production-summary-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbfa 100%);
-  border: 1px solid rgba(62, 96, 102, 0.14);
-  border-radius: 18px;
-  padding: 16px;
-  box-shadow: 0 10px 26px rgba(15, 39, 44, 0.06);
-}
-
-.production-summary-card span {
-  display: block;
-  color: #70868a;
-  font-size: 13px;
-  margin-bottom: 6px;
-  font-weight: 800;
-}
-
-.production-summary-card strong {
-  display: block;
-  font-size: 30px;
-  color: #25474d;
-  line-height: 1.1;
-}
-
-.production-summary-empty {
-  grid-column: 1 / -1;
-  min-height: 180px;
-  display: grid;
-  place-items: center;
-  color: #809397;
-  background: #f8fbfa;
-  border: 1px dashed rgba(62, 96, 102, 0.25);
-  border-radius: 18px;
-  font-weight: 800;
-}
-
-.production-section-card {
-  margin-bottom: 18px;
-}
-
-.production-section-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.production-section-hint {
-  color: #7f9296;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.production-issues-section:has(.production-table) {
-  border-color: rgba(199, 116, 35, 0.25);
-}
-
-.production-result-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.production-table-wrap {
-  overflow: auto;
-  max-width: 100%;
-}
-
-.production-table {
-  width: 100%;
-  min-width: 620px;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 14px;
-}
-
-.production-table th,
-.production-table td {
-  border-bottom: 1px solid rgba(62, 96, 102, 0.12);
-  padding: 11px 10px;
-  text-align: left;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.production-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  color: #3e6066;
-  background: #f2f6f5;
-  font-weight: 900;
-}
-
-.production-table tr:hover td {
-  background: rgba(62, 96, 102, 0.035);
-}
-
-.production-table td.num,
-.production-table th.num {
-  text-align: right;
-}
-
-.production-issue-badge {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: #fff1d6;
-  color: #8a5a00;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.production-pre {
-  min-height: 120px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: #f7faf9;
-  border: 1px solid rgba(62, 96, 102, 0.14);
-  border-radius: 12px;
-  padding: 12px;
-  color: #2d4d52;
-  font-size: 13px;
-}
-
-@media (max-width: 1100px) {
-  #production.production-center {
-    width: min(94vw, 980px);
-  }
-
-  .production-dashboard-grid,
-  .production-result-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .production-summary-panel {
-    position: static;
-  }
-}
-
-@media (max-width: 760px) {
-  #production.production-center {
-    width: 100%;
-  }
-
-  .production-page-head {
-    flex-direction: column;
-    margin-top: 8px;
-  }
-
-  .production-version-badge {
-    align-self: flex-start;
-  }
-
-  .production-card,
-  .production-section-card,
-  .production-summary-panel,
-  .production-result-grid > .card {
-    border-radius: 18px;
-  }
-
-  .production-control-grid,
-  .production-folder-panel,
-  .production-summary-grid-dashboard {
-    grid-template-columns: 1fr;
-  }
-
-  .production-date-single {
-    grid-column: auto;
-  }
-
-  .production-actions button {
-    width: 100%;
-  }
-
-  .production-section-title-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .production-table {
-    min-width: 720px;
-    font-size: 13px;
-  }
-}
-
-/* V2.1 - 需要處理操作按鈕 */
-.production-rule-btn {
-  margin: 2px 4px 2px 0;
-  padding: 6px 10px;
-  font-size: 13px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-.production-table td .production-rule-btn {
-  display: inline-block;
-}
-@media (max-width: 760px) {
-  .production-rule-btn {
-    width: 100%;
-    margin: 3px 0;
-  }
-}
-
-/* V2.2 - 工作階段 / 交接進度 */
-.production-session-box {
-  margin-top: 14px;
-  padding: 14px;
-  border-radius: 18px;
-  background: #f8fbfa;
-  border: 1px solid rgba(62, 96, 102, 0.14);
-}
-.production-session-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  color: #284b51;
-  margin-bottom: 10px;
-}
-.production-session-head span {
-  color: #71868a;
-  font-size: 13px;
-  font-weight: 800;
-}
-.production-session-list {
-  display: grid;
-  gap: 8px;
-  color: #71868a;
-  font-size: 14px;
-  font-weight: 700;
-}
-.production-session-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgba(62, 96, 102, 0.10);
-}
-.production-session-item strong {
-  color: #3e6066;
-  white-space: nowrap;
-}
-@media (max-width: 760px) {
-  .production-session-head,
-  .production-session-item {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-/* V2.4 - 商品使用量優先、平台統計縮小 */
-.production-products-section {
-  border-color: rgba(62, 96, 102, 0.18);
-}
-.production-products-section .production-table {
-  min-width: 520px;
-}
-.production-compact-stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-}
-.production-compact-stats > .card {
-  padding: 18px;
-  box-shadow: 0 10px 26px rgba(26, 56, 61, 0.05);
-}
-.production-compact-stats h3 {
-  font-size: 18px;
-  margin-bottom: 10px;
-}
-.production-compact-stats .production-table {
-  min-width: 280px;
-  font-size: 13px;
-}
-.production-compact-stats .production-table th,
-.production-compact-stats .production-table td {
-  padding: 8px 8px;
-}
-.production-alias-btn {
-  margin: 2px 0;
-  padding: 6px 10px;
-  font-size: 13px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-@media (max-width: 1100px) {
-  .production-compact-stats {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 760px) {
-  .production-alias-btn {
-    width: 100%;
-  }
-}
-
-
-/* V2.6 flow simplification */
-.production-status-box {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: #f6faf9;
-  border: 1px solid rgba(62,96,102,.16);
-  color: #3e6066;
-  font-weight: 800;
-}
-.production-status-box.is-running {
-  background: #fff7e8;
-  border-color: rgba(194,139,43,.28);
-  color: #8a5b10;
-}
-.production-status-box.is-done {
-  background: #edf8f1;
-  border-color: rgba(61,137,84,.25);
-  color: #326745;
-}
-.production-product-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 0 12px;
-}
-.production-product-toolbar input {
-  max-width: 420px;
-  width: 100%;
-}
-.production-product-toolbar span {
-  color: #789096;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.production-table .action-cell {
-  white-space: nowrap;
-}
-.production-table button.small {
-  margin: 2px 4px 2px 0;
-}
-@media (max-width: 760px) {
-  .production-product-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .production-product-toolbar input { max-width: none; }
-}
-
-/* V2.8 - 商品使用量明細側欄 */
-.production-product-inspector-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
-  gap: 14px;
-  align-items: start;
-}
-.production-product-select-btn {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: #25474d;
-  font-weight: 900;
-  cursor: pointer;
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.production-product-select-btn.is-active {
-  color: #b4782b;
-}
-.production-product-detail-panel {
-  border: 1px solid rgba(62, 96, 102, 0.14);
-  border-radius: 18px;
-  background: #f8fbfa;
-  padding: 14px;
-  max-height: 620px;
-  overflow: auto;
-  position: sticky;
-  top: 90px;
-}
-.production-side-empty {
-  min-height: 160px;
-  display: grid;
-  place-items: center;
-  color: #7b9094;
-  font-weight: 800;
-  text-align: center;
-  border: 1px dashed rgba(62,96,102,.22);
-  border-radius: 14px;
-  padding: 18px;
-  background: #fff;
-}
-.production-side-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.production-side-head h4 {
-  margin: 3px 0 0;
-  color: #25474d;
-  font-size: 18px;
-}
-.production-side-label {
-  color: #7b9094;
-  font-size: 12px;
-  font-weight: 900;
-}
-.production-side-head strong {
-  color: #3e6066;
-  white-space: nowrap;
-}
-.production-side-list {
-  display: grid;
-  gap: 10px;
-}
-.production-side-item {
-  background: #fff;
-  border: 1px solid rgba(62,96,102,.12);
-  border-radius: 14px;
-  padding: 12px;
-}
-.production-side-item-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: #3e6066;
-  margin-bottom: 6px;
-}
-.production-side-item-top span,
-.production-side-meta {
-  color: #7b9094;
-  font-size: 12px;
-  font-weight: 800;
-}
-.production-side-file {
-  color: #294a50;
-  font-weight: 900;
-  word-break: break-all;
-  line-height: 1.45;
-  margin-bottom: 6px;
-}
-.production-side-item .production-record-product-btn {
-  margin-top: 8px;
-}
-@media (max-width: 1100px) {
-  .production-product-inspector-layout {
-    grid-template-columns: 1fr;
-  }
-  .production-product-detail-panel {
-    position: static;
-    max-height: none;
-  }
-}
-
-.production-variant-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.production-variant-list span {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(62,96,102,.14);
-  background: rgba(62,96,102,.06);
-  color: #48666b;
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-
-/* V3.2 UX adjustments */
-.production-session-item{gap:12px;align-items:center;}
-.production-session-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.production-side-item .production-record-product-btn{margin-top:8px;}
-.defect-adjust-card{margin:14px 0 16px;}
-.compact-title{margin-bottom:10px;}
-.defect-adjust-grid{align-items:start;}
-.defect-submit-field{display:flex;flex-direction:column;justify-content:flex-end;}
-@media (max-width: 768px){
-  .production-session-actions{width:100%;justify-content:flex-start;}
-  .defect-adjust-grid{grid-template-columns:1fr;}
-}
-
-
-/* V3.9 指定庫存商品 */
-.production-picker-modal-box { max-width: 720px; }
-.production-picker-list { margin-top: 14px; display: grid; gap: 8px; max-height: 260px; overflow: auto; }
-.production-picker-empty { color: #7b8d8f; background: #f7f4ea; border-radius: 14px; padding: 12px 14px; font-weight: 700; }
-.production-picker-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #dfe8e6; border-radius: 14px; background: #fff; }
-.production-picker-row span { font-weight: 800; color: #24474c; }
-.production-picker-check { margin-top: 14px; }
-@media (max-width: 720px) { .production-picker-row { grid-template-columns: 1fr; } }
-
-/* V3.11 指定商品搜尋選單 */
-.production-picker-modal-box #productionProductPickerSearch {
-  margin-bottom: 8px;
-}
-.production-picker-modal-box #productionProductPickerSelect {
-  min-height: 170px;
-  padding: 8px;
-}
-.form-hint {
-  margin-top: 6px;
-  color: var(--muted, #789);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.production-picker-empty {
-  color: var(--muted, #789);
-  padding: 12px;
-  border: 1px dashed var(--line, #d9e2e2);
-  border-radius: 14px;
-}
-
-/* V3.12 指定商品搜尋 UI 改良 */
-.production-picker-modal-box {
-  max-width: 760px;
-  width: min(760px, calc(100vw - 32px));
-  padding: 28px;
-}
-.production-picker-modal-box .compact-note {
-  margin-bottom: 18px;
-  padding: 14px 18px;
-  border-radius: 18px;
-}
-.production-picker-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 16px;
-  align-items: start;
-}
-.production-picker-search-block,
-.production-picker-side {
-  min-width: 0;
-}
-.production-picker-results {
-  margin-top: 10px;
-  max-height: 280px;
-  overflow: auto;
-  display: grid;
-  gap: 8px;
-  padding-right: 4px;
-}
-.production-picker-result {
-  width: 100%;
-  border: 1px solid #dfe8e6;
-  background: #fff;
-  border-radius: 14px;
-  padding: 12px 14px;
-  text-align: left;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  color: #24474c;
-  box-shadow: none;
-}
-.production-picker-result:hover {
-  border-color: #3d676d;
-  background: #f5faf9;
-}
-.production-picker-result span {
-  font-weight: 850;
-  line-height: 1.35;
-}
-.production-picker-result small {
-  flex: 0 0 auto;
-  color: #7b8d8f;
-  font-weight: 750;
-}
-.production-picker-side .form-hint {
-  margin-top: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  background: #f7f4ea;
-}
-.production-picker-message {
-  min-height: 20px;
-  margin-top: 12px;
-  font-weight: 800;
-  color: #789;
-}
-.production-picker-message.is-error {
-  color: #b94a48;
-}
-.production-picker-message.is-done {
-  color: #2f7d4f;
-}
-.production-picker-list-title {
-  margin-top: 12px;
-  color: #6f8386;
-  font-weight: 900;
-}
-.production-picker-list {
-  max-height: 220px;
-}
-.production-picker-empty {
-  background: #f7f4ea;
-}
-@media (max-width: 720px) {
-  .production-picker-modal-box {
-    width: min(94vw, 760px);
-    padding: 22px;
-  }
-  .production-picker-layout {
-    grid-template-columns: 1fr;
-  }
-  .production-picker-results {
-    max-height: 220px;
-  }
-}
-
-
-/* V3.13 流程整理 */
-.production-detail-section {
-  padding: 0;
-  overflow: hidden;
-}
-.production-detail-summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 22px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  color: #24474c;
-  font-weight: 900;
-}
-.production-detail-summary::-webkit-details-marker { display: none; }
-.production-detail-summary::after {
-  content: "展開";
-  font-size: 13px;
-  color: #6f8386;
-  border: 1px solid #dfe8e6;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: #fff;
-}
-.production-detail-section[open] .production-detail-summary::after { content: "收合"; }
-.production-detail-summary small {
-  font-size: 14px;
-  color: #7b8d8f;
-  font-weight: 800;
-  margin-left: auto;
-}
-.production-detail-section .production-table-wrap {
-  padding: 0 24px 24px;
-}
-.production-side-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-.danger-text {
-  color: #b94a48 !important;
-  border-color: #efd3d0 !important;
-  background: #fffafa !important;
-}
-.production-section-hint {
-  line-height: 1.55;
-}
-@media (max-width: 720px) {
-  .production-detail-summary {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .production-detail-summary small {
-    margin-left: 0;
-  }
-}
-
-/* V3.14 - 介面精簡、本次異動置頂、智慧規則管理 */
-.production-dashboard-grid{align-items:start;}
-.production-control-card,.production-summary-panel{padding:20px;}
-.production-summary-panel{top:84px;}
-.production-summary-grid-dashboard{grid-template-columns:repeat(4,minmax(0,1fr));}
-.production-summary-card{padding:12px 14px;border-radius:14px;box-shadow:none;}
-.production-summary-card strong{font-size:24px;}
-.production-summary-empty{min-height:92px;}
-.production-session-box{padding:12px;margin-top:10px;}
-.production-compact-stats{gap:12px;}
-.production-compact-stats > .card{padding:14px 16px;border-radius:16px;box-shadow:none;}
-.production-compact-stats .production-table-wrap{max-height:230px;}
-.production-product-view-switch{display:flex;gap:6px;flex:0 0 auto;}
-.production-product-view-switch button.is-active{background:#3e6066;color:#fff;border-color:#3e6066;}
-.production-change-badge{display:inline-flex;margin-left:8px;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:900;vertical-align:middle;}
-.production-change-badge.is-new{background:#e5f5ea;color:#287046;}
-.production-change-badge.is-updated{background:#fff1d6;color:#8a5a00;}
-.production-changed-row td{background:rgba(255,247,226,.45);}
-.production-learning-toolbar{display:flex;align-items:center;gap:12px;margin:12px 0;}
-.production-learning-toolbar input{max-width:440px;}
-.production-learning-toolbar span{margin-left:auto;color:#71868a;font-weight:800;white-space:nowrap;}
-.production-learning-rule-list{display:grid;gap:8px;}
-.production-learning-rule-row{display:grid;grid-template-columns:minmax(180px,1fr) 28px minmax(220px,1.15fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(62,96,102,.14);border-radius:14px;background:#f8fbfa;}
-.production-learning-rule-row .arrow{color:#809397;text-align:center;font-weight:900;}
-.production-learning-rule-name{font-weight:900;color:#29494f;word-break:break-word;}
-.production-learning-rule-target{color:#526f74;word-break:break-word;}
-.production-picker-existing-rule{margin:10px 0;padding:12px 14px;border-radius:14px;background:#eef6f4;border:1px solid rgba(62,96,102,.16);color:#355a60;}
-.production-picker-existing-rule strong{display:block;margin-bottom:5px;}
-.production-picker-existing-rule button{margin-top:8px;}
-@media(max-width:1100px){
-  .production-summary-grid-dashboard{grid-template-columns:repeat(2,minmax(0,1fr));}
-}
-@media(max-width:760px){
-  .production-product-view-switch{width:100%;}
-  .production-product-view-switch button{flex:1;}
-  .production-learning-toolbar{align-items:stretch;flex-direction:column;}
-  .production-learning-toolbar input{max-width:none;}
-  .production-learning-toolbar span{margin-left:0;}
-  .production-learning-rule-row{grid-template-columns:1fr;gap:6px;}
-  .production-learning-rule-row .arrow{text-align:left;}
-}
-
-/* V3.16 compact analysis flow */
-.production-flow-strip{display:grid;grid-template-columns:minmax(150px,1fr) 44px minmax(150px,1fr) 44px minmax(150px,1fr);align-items:center;gap:8px;margin:0 0 16px;padding:12px 16px;border:1px solid rgba(62,96,102,.14);border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(26,56,61,.05)}
-.production-flow-step{display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;color:#87979a}
-.production-flow-step>span{grid-row:1/3;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#edf2f1;font-weight:900}
-.production-flow-step strong{font-size:15px;color:#617579}.production-flow-step small{font-size:12px}
-.production-flow-step.is-active>span,.production-flow-step.is-done>span{background:#3e6066;color:#fff}.production-flow-step.is-active strong,.production-flow-step.is-done strong{color:#27474d}
-.production-flow-line{height:2px;background:#dbe5e3;border-radius:99px}
-.production-control-grid-compact{grid-template-columns:180px 220px minmax(220px,320px);justify-content:start}
-.production-control-grid-compact .production-date-single{grid-column:auto}
-.production-control-grid-compact .production-process-field small{font-weight:600;color:#87979a}
-.production-folder-panel-compact{grid-template-columns:minmax(300px,700px);margin-top:12px}
-.production-folder-panel-compact .production-folder-picker{min-height:48px}
-.production-help-box{padding:9px 12px;margin-top:12px}
-.production-actions{margin-top:12px}.production-actions button{min-height:42px}
-.production-status-box{padding:10px 12px;margin-top:10px}
-.production-deduct-preview-section{padding:20px}
-.production-preview-badge{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;font-size:13px;font-weight:900;background:#eef2f1;color:#6f8286}
-.production-preview-badge.is-ready{background:#ddf2e4;color:#287445}.production-preview-badge.is-warning{background:#fff0d7;color:#9b6513}
-.production-deduct-preview-empty{padding:22px;border:1px dashed rgba(62,96,102,.25);border-radius:16px;color:#7d9094;text-align:center;background:#fafcfb}
-.production-deduct-list{display:grid;gap:8px}.production-deduct-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(62,96,102,.12);border-radius:14px;background:#fbfdfc}
-.production-deduct-row strong{color:#29484e}.production-deduct-qty{font-weight:900;color:#a54c43}.production-deduct-status{font-size:12px;font-weight:900;padding:5px 8px;border-radius:999px;background:#e2f2e7;color:#34764a}.production-deduct-status.is-warning{background:#fff0d8;color:#9c6512}
-.production-deduct-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:14px}.production-deduct-totals{font-weight:800;color:#617579}.production-deduct-footer button[disabled]{opacity:.55;cursor:not-allowed}
-@media(max-width:900px){.production-flow-strip{grid-template-columns:1fr}.production-flow-line{display:none}.production-control-grid-compact{grid-template-columns:1fr 1fr}.production-control-grid-compact .production-process-field{grid-column:1/-1}.production-folder-panel-compact{grid-template-columns:1fr}}
-@media(max-width:640px){.production-control-grid-compact{grid-template-columns:1fr}.production-control-grid-compact .production-process-field{grid-column:auto}.production-deduct-row{grid-template-columns:1fr auto}.production-deduct-status{grid-column:1/-1;justify-self:start}.production-deduct-footer{align-items:stretch;flex-direction:column}.production-deduct-footer button{width:100%}}
-
-/* V3.17 - 精簡直覺工作流程 UI */
-.production-ux-v317 {
-  --prod-ink: #27464b;
-  --prod-muted: #72878b;
-  --prod-line: rgba(62, 96, 102, .13);
-  --prod-soft: #f6f9f8;
-  --prod-warm: #fbf7ed;
-}
-
-.production-ux-v317 .production-page-head {
-  margin: 12px 0 14px;
-  align-items: center;
-}
-.production-ux-v317 .production-kicker { display: none; }
-.production-ux-v317 .production-page-head h2 { font-size: clamp(23px, 2vw, 30px); }
-.production-ux-v317 .production-subtitle { margin-top: 5px; font-size: 14px; }
-.production-ux-v317 .production-version-badge {
-  font-size: 12px;
-  padding: 7px 11px;
-  border-radius: 999px;
-}
-
-/* 流程列改成輕量導引，不再像第三張大卡片 */
-.production-ux-v317 .production-flow-strip {
-  margin-bottom: 14px;
-  padding: 8px 14px;
-  border-radius: 14px;
-  box-shadow: none;
-  background: rgba(255,255,255,.72);
-}
-.production-ux-v317 .production-flow-step {
-  grid-template-columns: 28px 1fr;
-  column-gap: 8px;
-}
-.production-ux-v317 .production-flow-step > span {
-  width: 28px;
-  height: 28px;
-  font-size: 12px;
-}
-.production-ux-v317 .production-flow-step strong { font-size: 14px; }
-.production-ux-v317 .production-flow-step small { display: none; }
-
-/* 主工作區：左側操作、右側摘要，卡片更輕、更緊湊 */
-.production-ux-v317 .production-dashboard-grid {
-  grid-template-columns: minmax(0, 1.65fr) minmax(300px, .75fr);
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.production-ux-v317 .production-control-card,
-.production-ux-v317 .production-summary-panel {
-  padding: 18px 20px;
-  border-radius: 18px;
-  box-shadow: 0 10px 28px rgba(26,56,61,.055);
-}
-.production-ux-v317 .production-card-head {
-  margin-bottom: 12px;
-}
-.production-ux-v317 .production-card-head h3 {
-  font-size: 20px;
-  margin-bottom: 2px;
-}
-.production-ux-v317 .production-card-head .note {
-  margin: 0;
-  font-size: 13px;
-  color: var(--prod-muted);
-}
-
-/* 設定欄位改為真正的工具列比例，不再每格撐滿 */
-.production-ux-v317 .production-control-grid-compact {
-  display: grid;
-  grid-template-columns: minmax(145px, .65fr) minmax(190px, .85fr) minmax(210px, 1fr);
-  gap: 10px;
-}
-.production-ux-v317 .field label {
-  margin-bottom: 5px;
-  font-size: 13px;
-  color: var(--prod-muted);
-}
-.production-ux-v317 .production-control-grid input,
-.production-ux-v317 .production-control-grid select {
-  min-height: 44px;
-  padding-top: 9px;
-  padding-bottom: 9px;
-  border-radius: 12px;
-  background: #fff;
-}
-
-/* 資料夾列改成單一清楚的操作列 */
-.production-ux-v317 .production-folder-panel-compact {
-  margin-top: 10px;
-  grid-template-columns: 1fr;
-}
-.production-ux-v317 .production-folder-field > label { display: none; }
-.production-ux-v317 .production-folder-picker {
-  min-height: 50px;
-  padding: 6px;
-  border-style: solid;
-  border-color: var(--prod-line);
-  background: var(--prod-soft);
-}
-.production-ux-v317 .production-folder-button {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 10px;
-  background: #fff;
-}
-.production-ux-v317 .production-folder-selection {
-  font-size: 14px;
-  color: #557076;
-}
-
-/* 使用說明降級成文字連結感 */
-.production-ux-v317 .production-help-box {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-  font-size: 13px;
-}
-.production-ux-v317 .production-help-box summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #6d8185;
-}
-.production-ux-v317 .production-help-box summary::before { content: "ⓘ"; }
-.production-ux-v317 .production-help-box[open] {
-  display: block;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--prod-warm);
-}
-
-/* 主次操作層級明確 */
-.production-ux-v317 .production-actions {
-  margin-top: 10px;
-  align-items: center;
-}
-.production-ux-v317 .production-actions button {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 11px;
-}
-.production-ux-v317 #productionAnalyzeBtn {
-  min-width: 150px;
-}
-.production-ux-v317 #productionClearBtn,
-.production-ux-v317 #productionExportCsvBtn {
-  background: transparent;
-  box-shadow: none;
-}
-.production-ux-v317 .production-status-box {
-  min-height: 0;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  font-size: 13px;
-  border-width: 1px;
-}
-
-/* 摘要改為一眼掃讀，不讓卡片內再堆卡片 */
-.production-ux-v317 .production-summary-panel {
-  position: sticky;
-  top: 82px;
-}
-.production-ux-v317 .production-summary-grid-dashboard {
-  grid-template-columns: repeat(4, minmax(0,1fr));
-  gap: 6px;
-}
-.production-ux-v317 .production-summary-card {
-  min-width: 0;
-  padding: 10px 8px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--prod-soft);
-  text-align: center;
-}
-.production-ux-v317 .production-summary-card span,
-.production-ux-v317 .production-summary-card small {
-  font-size: 11px;
-  white-space: nowrap;
-}
-.production-ux-v317 .production-summary-card strong {
-  display: block;
-  margin-top: 2px;
-  font-size: 22px;
-}
-.production-ux-v317 .production-session-box {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--prod-line);
-  border-radius: 13px;
-  background: #fff;
-}
-.production-ux-v317 .production-session-head {
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-.production-ux-v317 .production-session-list {
-  font-size: 13px;
-}
-.production-ux-v317 .production-session-item {
-  padding: 8px 9px;
-  border-radius: 10px;
-}
-.production-ux-v317 .production-session-item button {
-  min-height: 32px;
-  padding: 0 9px;
-  font-size: 12px;
-}
-
-/* 下方功能卡片統一降低框感 */
-.production-ux-v317 .production-section-card,
-.production-ux-v317 .production-result-grid > .card {
-  border-radius: 18px;
-  box-shadow: 0 8px 24px rgba(26,56,61,.045);
-}
-.production-ux-v317 .production-section-title-row {
-  align-items: center;
-}
-.production-ux-v317 .production-section-title-row h3 {
-  font-size: 20px;
-}
-.production-ux-v317 .production-section-hint {
-  font-size: 13px;
-  max-width: 760px;
-}
-
-@media (max-width: 1180px) {
-  .production-ux-v317 .production-dashboard-grid { grid-template-columns: 1fr; }
-  .production-ux-v317 .production-summary-panel { position: static; }
-  .production-ux-v317 .production-summary-grid-dashboard { grid-template-columns: repeat(4,minmax(0,1fr)); }
-}
-@media (max-width: 760px) {
-  .production-ux-v317 .production-page-head { align-items: flex-start; flex-direction: column; }
-  .production-ux-v317 .production-flow-strip { grid-template-columns: repeat(3,1fr); }
-  .production-ux-v317 .production-flow-step { grid-template-columns: 26px 1fr; }
-  .production-ux-v317 .production-control-grid-compact { grid-template-columns: 1fr; }
-  .production-ux-v317 .production-summary-grid-dashboard { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .production-ux-v317 .production-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .production-ux-v317 #productionAnalyzeBtn { grid-column: 1 / -1; width: 100%; }
-  .production-ux-v317 .production-actions button { width: 100%; }
-  .production-ux-v317 .production-section-title-row { align-items: flex-start; flex-direction: column; }
-}
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>金雀庫存管理系統</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/production.css" />
+</head>
+<body>
+
+  <div id="authPanel" class="auth-panel">
+    <div class="auth-card">
+      <h2>金雀庫存管理系統</h2>
+      <p id="authMessage">請使用公司授權的 Google 帳號登入。</p>
+      <button id="googleLoginBtn" type="button">使用 Google 登入</button>
+    </div>
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div class="brand-block">
+        <h1>金雀庫存管理系統</h1>
+        <p>庫存查詢・在途管理・成本報表・商品對應</p>
+      </div>
+
+      <button id="mobileAccountToggleBtn" class="secondary small mobile-account-toggle" type="button">帳號 / 同步 ▾</button>
+      <div class="role-box" id="roleBox">
+        <span>目前身份</span>
+        <select id="roleSelect">
+          <option value="staff">全員 / 美編</option>
+          <option value="emily">Emily</option>
+          <option value="process">製程人員</option>
+          <option value="boss">老闆</option>
+          <option value="qing">青</option>
+        </select>
+        <button id="clearRoleBtn" class="secondary small" type="button">清除管理身份</button>
+        <span id="userInfoText" class="user-info-text">未登入</span>
+        <span id="syncStatusText" class="sync-status-text">尚未同步</span>
+        <button id="logoutBtn" class="secondary small" type="button">登出</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">📦 庫存總覽</button>
+      <button class="tab" data-tab="incoming">🚚 在途商品</button>
+      <button class="tab" data-tab="production">📈 生產分析</button>
+      <button class="tab" data-tab="history">📜 最近庫存異動</button>
+      <button class="tab" data-tab="admin">⚙️ 管理後台</button>
+    </nav>
+
+    <!-- 庫存總覽 -->
+    <section id="overview" class="tab-panel">
+      <div class="toolbar">
+        <div class="left">
+          <input id="searchInput" placeholder="搜尋品項，例如：墨水、木盒、壓克力" />
+          <select id="categoryFilter">
+            <option value="all">全部分類</option>
+            <option value="金屬">金屬</option>
+            <option value="木頭">木頭</option>
+            <option value="彩印">彩印</option>
+            <option value="包材">包材</option>
+          </select>
+        </div>
+        <div class="right">
+          <button class="secondary small" id="restockToggleBtn">只看需補貨</button>
+        </div>
+      </div>
+
+      <p class="view-hint">大量品項清單模式，一列一個品項。點「庫存」欄位可排序。</p>
+      <div id="inventoryGrid"></div>
+    </section>
+
+
+    <!-- 生產分析 -->
+    <section id="production" class="tab-panel hidden production-center production-ux-v317">
+      <div class="production-page-head">
+        <div>
+          <p class="production-kicker">Production Center</p>
+          <h2>📊 生產分析中心</h2>
+          <p class="production-subtitle">選擇資料夾並分析；新增或數量變動的品項會優先顯示。</p>
+        </div>
+        <span class="badge info production-version-badge">V3.17 工作流程介面版：只預覽，不實際扣庫存</span>
+      </div>
+
+      <div class="production-flow-strip" aria-label="生產分析流程">
+        <div class="production-flow-step is-active" data-step="analyze"><span>1</span><strong>分析</strong><small>讀取資料夾與檔名</small></div>
+        <div class="production-flow-line"></div>
+        <div class="production-flow-step" data-step="review"><span>2</span><strong>確認</strong><small>核對品項與待確認事項</small></div>
+        <div class="production-flow-line"></div>
+        <div class="production-flow-step" data-step="deduct"><span>3</span><strong>扣庫存</strong><small>目前僅提供預覽</small></div>
+      </div>
+
+      <div class="production-dashboard-grid">
+        <div class="card production-card production-control-card">
+          <div class="production-card-head">
+            <div>
+              <h3>建立分析</h3>
+              <p class="note">選好日期、資料夾與製程後開始分析。</p>
+            </div>
+          </div>
+
+          <div class="production-control-grid production-control-grid-compact">
+            <div class="field">
+              <label>分析模式</label>
+              <select id="productionModeInput">
+                <option value="single">單日分析</option>
+                <option value="range">日期區間 / 一週分析</option>
+                <option value="all">分析所選資料夾全部日期</option>
+              </select>
+            </div>
+            <div class="field production-date-single">
+              <label>分析日期</label>
+              <input id="productionDateInput" type="date" />
+            </div>
+            <div class="field production-date-range hidden">
+              <label>開始日期</label>
+              <input id="productionStartDateInput" type="date" />
+            </div>
+            <div class="field production-date-range hidden">
+              <label>結束日期</label>
+              <input id="productionEndDateInput" type="date" />
+            </div>
+            <div class="field production-process-field">
+              <label>製程名稱 <small>（選日期資料夾時填）</small></label>
+              <input id="productionProcessInput" placeholder="例如：金屬、彩印" />
+            </div>
+          </div>
+
+          <div class="production-folder-panel production-folder-panel-compact">
+            <div class="field production-folder-field">
+              <label>選擇資料夾</label>
+              <div class="production-folder-picker">
+                <input id="productionFileInput" class="production-folder-native-input" type="file" multiple webkitdirectory directory />
+                <label for="productionFileInput" id="productionChooseFolderBtn" class="production-folder-button">選擇資料夾</label>
+                <span id="productionSelectedFolderText" class="production-folder-selection">尚未選擇資料夾</span>
+              </div>
+            </div>
+          </div>
+
+          <details class="production-help-box">
+            <summary>使用說明</summary>
+            <p>如果選的是「金屬製作檔」這層，系統會依日期資料夾判斷製程；如果直接選「2026-07-07」日期資料夾，建議填寫製程名稱。</p>
+            <p>網頁版只讀檔名，不讀檔案內容；副檔名不影響分析。</p>
+          </details>
+
+          <div class="production-actions production-actions-primary">
+            <button id="productionAnalyzeBtn" type="button">分析所選資料夾</button>
+            <button id="productionClearBtn" class="secondary" type="button">清除已選資料夾</button>
+            <button id="productionExportCsvBtn" class="secondary" type="button" disabled>匯出 CSV</button>
+          </div>
+          <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
+        </div>
+
+        <aside class="card production-summary-panel">
+          <div class="production-card-head">
+            <div>
+              <h3>今日分析摘要</h3>
+              
+            </div>
+          </div>
+          <div id="productionSummaryCards" class="production-summary-grid production-summary-grid-dashboard">
+            <div class="production-summary-empty">尚未分析</div>
+          </div>
+          <div class="production-session-box">
+            <div class="production-session-head">
+              <strong>目前分析進度</strong>
+              <span id="productionSessionLabel">尚未建立</span>
+            </div>
+            <div id="productionSessionList" class="production-session-list">分析資料夾後會顯示進度。</div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="production-section-card card production-products-section">
+        <div class="production-section-title-row">
+          <h3>商品使用量</h3>
+          <span class="production-section-hint">分析完成後先看這裡；可用「對應庫存品項」整理本次分析；若要永久記住，請在右側明細使用「指定商品」。</span>
+        </div>
+        <div class="production-product-toolbar">
+          <input id="productionProductSearchInput" placeholder="搜尋商品使用量，例如：名牌、軍牌、USB" />
+          <div class="production-product-view-switch" role="group" aria-label="商品顯示範圍">
+            <button id="productionProductViewAllBtn" type="button" class="secondary small is-active">全部</button>
+            <button id="productionProductViewChangedBtn" type="button" class="secondary small">本次異動</button>
+          </div>
+          <span id="productionProductCountHint">尚未分析</span>
+        </div>
+        <div class="production-product-inspector-layout">
+          <div id="productionProductResult" class="production-table-wrap">尚未分析</div>
+          <aside id="productionProductDetailPanel" class="production-product-detail-panel">
+            <div class="production-side-empty">點選左側商品後，這裡會顯示計入該品項的檔案明細。</div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="production-section-card card production-issues-section">
+        <div class="production-section-title-row">
+          <h3>待確認事項</h3>
+          <span class="production-section-hint">待確認項目仍會列入本次分析統計；目前安全版不會寫入庫存，正式扣庫存前建議先完成確認。</span>
+        </div>
+        <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
+      </section>
+
+      <section class="production-section-card card production-deduct-preview-section">
+        <div class="production-section-title-row">
+          <div>
+            <h3>待扣庫存預覽</h3>
+            <span class="production-section-hint">此區目前只顯示預計扣減內容，不會寫入實際庫存。</span>
+          </div>
+          <span id="productionDeductReadyBadge" class="production-preview-badge is-idle">尚未分析</span>
+        </div>
+        <div id="productionDeductPreview" class="production-deduct-preview-empty">完成分析後會顯示預計扣除的庫存品項。</div>
+        <div class="production-deduct-footer">
+          <div id="productionDeductTotals" class="production-deduct-totals"></div>
+          <button id="productionConfirmDeductBtn" type="button" disabled title="此版本尚未啟用實際扣庫存">確認扣庫存（尚未啟用）</button>
+        </div>
+      </section>
+
+      <div class="production-result-grid production-result-grid-dashboard production-compact-stats">
+        <div class="card">
+          <h3>平台統計</h3>
+          <div id="productionSourceResult" class="production-table-wrap">尚未分析</div>
+        </div>
+        <div class="card">
+          <h3>標籤統計</h3>
+          <div id="productionTagResult" class="production-table-wrap">尚未分析</div>
+        </div>
+        <div class="card">
+          <h3>製程統計</h3>
+          <div id="productionProcessResult" class="production-table-wrap">尚未分析</div>
+        </div>
+      </div>
+
+      <details class="production-section-card card production-learning-section">
+        <summary class="production-detail-summary">
+          <span>智慧學習規則</span>
+          <small>管理「永久記住」的商品指定；刪除後只影響未來分析。</small>
+        </summary>
+        <div class="production-learning-toolbar">
+          <input id="productionLearningSearchInput" placeholder="搜尋解析名稱或庫存品項" />
+          <span id="productionLearningCountHint">0 筆規則</span>
+        </div>
+        <div id="productionLearningRuleList" class="production-learning-rule-list">
+          <div class="production-side-empty">目前沒有永久學習規則。</div>
+        </div>
+      </details>
+
+      <details id="productionDetailSection" class="production-section-card card production-detail-section">
+        <summary class="production-detail-summary">
+          <span>分析明細</span>
+          <small>預設收合；需要回查原始檔名時再展開。</small>
+        </summary>
+        <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
+      </details>
+
+    </section>
+
+    <!-- 在途商品 -->
+    <section id="incoming" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>在途商品 / 到貨登記</h2>
+        <span class="badge info">查看叫貨並直接確認到貨</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>叫貨日期</th>
+            <th>品項</th>
+            <th>叫貨數量</th>
+            <th>已到貨</th>
+            <th>剩餘在途</th>
+<th>叫貨人</th>
+            <th>狀態</th>
+            <th>本次到貨</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="incomingTable"></tbody>
+      </table>
+    </section>
+
+    <!-- 管理後台 -->
+    
+
+
+    <section id="history" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>最近庫存異動</h2>
+        <span class="badge info">追蹤盤點、到貨與新增紀錄</span>
+      </div>
+
+      <div class="card">
+        <div class="form-grid">
+          <div class="field">
+            <label>搜尋異動紀錄</label>
+            <input id="historySearchInput" placeholder="搜尋品項、原因、人員" />
+          </div>
+          <div class="field">
+            <label>顯示筆數</label>
+            <select id="historyLimitSelect">
+              <option value="20">最近 20 筆</option>
+              <option value="50">最近 50 筆</option>
+              <option value="100">最近 100 筆</option>
+              <option value="all">全部</option>
+            </select>
+          </div>
+          <div class="field filter-action-field">
+            <button id="clearHistoryBtn" class="danger" type="button">清除異動紀錄</button>
+          </div>
+        </div>
+        <p class="note">清除異動紀錄不會影響目前庫存、品項或在途資料。此動作無法復原。</p>
+      </div>
+
+      <div class="card">
+        <div id="historyPageList" class="stock-history-list">尚無庫存異動紀錄</div>
+      </div>
+    </section>
+
+<section id="admin" class="tab-panel hidden">
+      <div id="adminLocked" class="card locked">
+        <h3>🔐 管理後台</h3>
+        <p>這區僅限授權管理身份進入。</p>
+      </div>
+
+      <div id="adminContent" class="hidden">
+        <div class="admin-section order-section">
+          <div class="section-title admin-section-title">
+            <h2>叫貨管理</h2>
+          </div>
+          <div class="order-input-grid">
+
+        <div class="card">
+          <h3>手動新增叫貨</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>搜尋品項</label>
+              <input id="manualOrderItemSearch" placeholder="輸入內部品項關鍵字" autocomplete="off" />
+              <div id="manualOrderAutocompleteList"></div>
+              <input type="hidden" id="manualOrderItemSelect" />
+            </div>
+            <div class="field">
+              <label>叫貨數量</label>
+              <input id="manualOrderQty" type="number" min="1" placeholder="例如：100" />
+            </div>
+            <div class="field">
+              <label>商品成本</label>
+              <input id="manualOrderCost" type="number" min="0" placeholder="例如：1280" />
+            </div>
+            <div class="field">
+              <label>運費</label>
+              <input id="manualOrderFreight" type="number" min="0" placeholder="例如：80" />
+            </div>
+            <div class="field">
+              <label>幣別</label>
+              <select id="manualOrderCurrency">
+                <option value="TWD">台幣 TWD</option>
+                <option value="CNY">人民幣 CNY</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>匯率 / 換算</label>
+              <input id="manualOrderFxPreview" readonly placeholder="台幣免換算" />
+            </div>
+            <div class="field">
+              <label>來源</label>
+              <input id="manualOrderSource" placeholder="例如：1688、蝦皮、LINE叫貨" />
+            </div>
+            <div class="field">
+              <label>叫貨日期</label>
+              <input id="manualOrderDate" type="date" />
+            </div>
+            <div class="field manual-order-action">
+              <button id="addManualOrderBtn" type="button">新增叫貨紀錄</button>
+            </div>
+          </div>
+          <p class="note">手動新增後會直接進入「在途商品」，並計入成本報表。</p>
+        </div>
+          </div>
+
+        <div class="section-title">
+          <h2>叫貨紀錄（含成本）</h2>
+          <span class="badge bad">成本 / 來源不給全員頁顯示</span>
+        </div>
+
+        <div class="table-scroll">
+        <div class="card compact-filter-card">
+          <div class="form-grid">
+            <div class="field">
+              <label>叫貨月份</label>
+              <select id="orderMonthFilter">
+                <option value="all">全部月份</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>叫貨人</label>
+              <select id="orderPersonFilter">
+                <option value="all">全部叫貨人</option>
+                <option value="老闆">老闆</option>
+                <option value="青">青</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>搜尋叫貨紀錄</label>
+              <input id="orderSearchInput" placeholder="搜尋品項、來源" />
+            </div>
+            <div class="field filter-action-field">
+              <button id="applyOrderFilterBtn" type="button">搜尋</button>
+            </div>
+            <div class="field filter-action-field">
+              <button id="resetOrderFilterBtn" class="secondary" type="button">清除篩選</button>
+            </div>
+          </div>
+        </div>
+        <p id="orderFilterStatus" class="filter-status">目前顯示全部叫貨紀錄</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>品項</th>
+              <th>數量</th>
+              <th>已到貨</th>
+<th>來源</th>
+              <th>叫貨人</th>
+              <th>狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="adminOrdersTable"></tbody>
+        </table>
+        </div>
+        </div>
+
+        <div class="admin-section cost-section">
+        <div class="section-title">
+          <h2>成本報表</h2>
+          <span class="badge info">月份保留，方便對帳</span>
+        </div>
+
+        <div class="card">
+          <div class="form-grid">
+            <div class="field">
+              <label>年度</label>
+              <select id="costYearSelect"></select>
+            </div>
+            <div class="field">
+              <label>年度總進貨成本</label>
+              <input id="yearTotalCost" readonly />
+            </div>
+          </div>
+        </div>
+
+        <table id="monthlyCostTableWrap">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>總進貨成本</th>
+              <th>在途成本</th>
+              <th>包材成本</th>
+            </tr>
+          </thead>
+          <tbody id="monthlyCostTable"></tbody>
+        </table>
+        <div id="monthlyCostCards" class="mobile-cost-cards"></div>
+        </div>
+
+        <div class="admin-section item-section">
+        <div class="section-title">
+          <h2>品項管理</h2>
+          <span class="badge warn">停賣建議停用，不直接刪除</span>
+        </div>
+
+        <div class="card">
+          <h3>新增品項</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label>品項名稱</label>
+              <input id="newItemNameManage" placeholder="例如：黃銅門牌" />
+            </div>
+            <div class="field">
+              <label>分類</label>
+              <select id="newItemCategoryManage">
+                <option>金屬</option>
+                <option>木頭</option>
+                <option>彩印</option>
+                <option>包材</option>
+                <option>熱轉印 / 熱昇華</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>新增分類（選填）</label>
+              <input id="newCategoryInput" placeholder="例如：雷雕、印刷" />
+            </div>
+            <div class="field">
+              <label>安全庫存</label>
+              <input id="newItemSafetyManage" type="number" placeholder="例如：10" />
+            </div>
+            <div class="field">
+              <label>初始庫存</label>
+              <input id="newItemStockManage" type="number" min="0" placeholder="例如：100" />
+            </div>
+            <div class="field">
+              <label>管理部門</label>
+              <input id="newItemDeptManage" placeholder="例如：金屬 / 彩印" />
+            </div>
+            <div class="field check-field">
+              <input id="newItemSharedManage" type="checkbox" />
+              <label for="newItemSharedManage">共用庫存</label>
+            </div>
+            <div class="field full">
+              <label>備註</label>
+              <input id="newItemNoteManage" placeholder="例如：門牌類常用品項" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button id="addItemManageBtn">新增品項</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="form-grid">
+            <div class="field">
+              <label>搜尋品項管理</label>
+              <input id="itemManageSearch" placeholder="輸入品項名稱，例如：墨水" />
+            </div>
+            <div class="field">
+              <label>分類篩選</label>
+              <select id="itemManageCategoryFilter">
+                <option value="all">全部分類</option>
+              </select>
+            </div>
+            <div class="field filter-action-field">
+              <button id="resetItemManageFilterBtn" class="secondary" type="button">清除篩選</button>
+            </div>
+          </div>
+          <p class="note">不想再列入庫存的品項，建議先按「停用」。建錯才按「刪除」。</p>
+        </div>
+
+        <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>品項</th>
+              <th>分類</th>
+              <th>安全庫存</th>
+              <th>狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="itemManageTable"></tbody>
+        </table>
+        </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+
+  <div id="quickStockModal" class="modal-mask">
+    <div class="modal-box quick-stock-modal-box">
+      <h3>快速盤點</h3>
+      <input type="hidden" id="quickStockItemId" />
+      <p id="quickStockItemText">請確認品項</p>
+
+      <div class="quick-stock-tabs" role="tablist" aria-label="快速盤點模式">
+        <button type="button" class="quick-stock-tab active" data-quick-tab="audit">盤點修正</button>
+        <button type="button" class="quick-stock-tab" data-quick-tab="adjust">庫存調整</button>
+      </div>
+
+      <section class="quick-stock-pane active" id="quickStockPaneAudit">
+        <div class="field"><label>目前庫存</label><div id="quickStockOldQtyDisplay" class="readonly-value stock-readonly-display">0</div><input id="quickStockOldQty" type="hidden" readonly /></div>
+        <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
+        <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
+        <div class="field">
+          <label>異動原因</label>
+          <select id="quickStockReason">
+            <option value="盤點更新">盤點更新</option>
+            <option value="盤點修正">盤點修正</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>自訂原因（選填）</label>
+          <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
+        </div>
+      </section>
+
+      <section class="quick-stock-pane" id="quickStockPaneAdjust">
+        <div class="quick-stock-current">目前庫存：<strong id="quickAdjustCurrentQty">0</strong></div>
+        <div class="field">
+          <label>調整方式</label>
+          <select id="quickAdjustType">
+            <option value="decrease">扣減庫存</option>
+            <option value="increase">增加庫存</option>
+          </select>
+        </div>
+        <div class="field"><label>調整數量</label><input id="quickAdjustQty" type="number" min="1" placeholder="例如：10" /></div>
+        <div class="field">
+          <label>原因</label>
+          <select id="quickAdjustReason">
+            <option value="料物瑕疵">料物瑕疵</option>
+            <option value="報廢調整">報廢調整</option>
+            <option value="測試耗材">測試耗材</option>
+            <option value="遺失">遺失</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>備註（選填）</label>
+          <input id="quickAdjustNote" placeholder="例如：製程發現料物瑕疵" />
+        </div>
+        <div class="quick-adjust-preview" id="quickAdjustPreview">調整後庫存：-</div>
+        <div class="modal-inline-error" id="quickStockInlineError" hidden></div>
+      </section>
+
+      <div class="modal-actions">
+        <button class="secondary" id="cancelQuickStockBtn" type="button">取消</button>
+        <button id="confirmQuickStockBtn" type="button">確認更新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 密碼 Modal -->
+  <div id="passwordModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>管理身份驗證</h3>
+      <p id="passwordModalText">請完成管理身份驗證。</p>
+      <input id="passwordInput" type="password" placeholder="請輸入管理密碼" />
+      <div class="modal-actions">
+        <button class="secondary" id="cancelPasswordBtn">取消</button>
+        <button id="confirmPasswordBtn">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改叫貨紀錄 Modal -->
+  <div id="editOrderModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>修改叫貨紀錄</h3>
+      <input type="hidden" id="editOrderId" />
+      <div class="field"><label>品項</label><select id="editOrderItem"></select></div>
+      <div class="field"><label>叫貨數量</label><input id="editOrderQty" type="number" min="0" /></div>
+      <div class="field"><label>已到貨數量</label><input id="editOrderReceived" type="number" min="0" /></div>
+      <div class="field"><label>成本</label><input id="editOrderCost" type="number" min="0" /></div>
+      <div class="field"><label>來源</label><input id="editOrderSource" /></div>
+      <div class="modal-actions">
+        <button class="secondary" id="closeEditOrderBtn">取消</button>
+        <button id="saveEditOrderBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改品項 Modal -->
+  <div id="editItemModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>修改品項資料</h3>
+      <input type="hidden" id="editItemId" />
+      <div class="field"><label>品項名稱</label><input id="editItemNameInput" /></div>
+      <div class="field">
+        <label>分類</label>
+        <select id="editItemCategoryInput">
+          <option>金屬</option>
+          <option>木頭</option>
+          <option>彩印</option>
+          <option>包材</option>
+<option>熱轉印 / 熱昇華</option>
+        </select>
+      </div>
+      <div class="field"><label>管理部門</label><input id="editItemDeptInput" placeholder="例如：金屬 / 彩印" /></div>
+      <div class="field"><label>安全庫存</label><input id="editItemSafetyInput" type="number" min="0" /></div>
+      <div class="field check-field"><input id="editItemSharedInput" type="checkbox" /><label for="editItemSharedInput">共用庫存</label></div>
+
+      <div class="stock-adjust-panel">
+        <div class="stock-adjust-title">
+          <strong>庫存調整</strong>
+          <span id="editItemCurrentStockText">目前庫存：-</span>
+        </div>
+        <p class="note compact-note">此區可直接輸入數量，系統會自動加減庫存並留下異動紀錄；不需要自己先計算新庫存。</p>
+        <div class="form-grid compact-adjust-grid">
+          <div class="field">
+            <label>調整類型</label>
+            <select id="editItemAdjustType">
+              <option value="none">不調整庫存</option>
+              <option value="deduct">扣減庫存</option>
+              <option value="add">增加庫存</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>調整數量</label>
+            <input id="editItemAdjustQty" type="number" min="1" step="1" placeholder="例如：10" />
+          </div>
+          <div class="field">
+            <label>原因</label>
+            <select id="editItemAdjustReason">
+              <option value="料物瑕疵">料物瑕疵</option>
+              <option value="製程損耗">製程損耗</option>
+              <option value="測試耗材">測試耗材</option>
+              <option value="盤點修正">盤點修正</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field"><label>備註</label><input id="editItemNoteInput" /></div>
+      <div class="modal-actions">
+        <button class="secondary" id="closeEditItemBtn">取消</button>
+        <button id="saveEditItemBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="productionProductPickerModal" class="modal-mask">
+    <div class="modal-box production-picker-modal-box">
+      <h3>指定庫存商品</h3>
+      <p class="note compact-note" id="productionProductPickerTitle">請選擇正式庫存品項。若一個檔案包含兩個顏色，請分別加入兩個品項。</p>
+      <div class="production-picker-layout">
+        <div class="production-picker-search-block">
+          <div class="field">
+            <label>搜尋庫存品項</label>
+            <input id="productionProductPickerSearch" type="text" placeholder="輸入關鍵字，例如：木木筆、軍牌、銀" autocomplete="off" />
+          </div>
+          <div id="productionProductPickerResults" class="production-picker-results">
+            <div class="production-picker-empty">請輸入關鍵字搜尋正式庫存品項。</div>
+          </div>
+        </div>
+        <div class="production-picker-side">
+          <div class="field">
+            <label>本檔計入數量（可修正）</label>
+            <input id="productionProductPickerParsedQty" type="number" min="1" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label>加入庫存品項數量</label>
+            <input id="productionProductPickerQty" type="number" min="1" step="1" value="1" />
+          </div>
+          <div class="form-hint">點選左側搜尋結果後，會加入下方清單；原解析名稱不會自動加入。</div>
+        </div>
+      </div>
+      <div id="productionProductPickerExistingRule" class="production-picker-existing-rule hidden"></div>
+      <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
+      <div class="production-picker-list-title">已指定庫存品項</div>
+      <div id="productionProductPickerList" class="production-picker-list"></div>
+      <div class="production-picker-options">
+        <label class="check-field production-picker-check hidden" id="productionProductPickerBatchBox">
+          <input type="checkbox" id="productionProductPickerBatch" />
+          <span>套用同組全部檔案</span>
+        </label>
+        <label class="check-field production-picker-check stats-only-check">
+          <input type="checkbox" id="productionProductPickerStatsOnly" />
+          <span><strong>僅統計，不扣庫存</strong><small>適合壓克力吊飾、立牌、木板、立體字等板材加工品</small></span>
+        </label>
+        <label class="check-field production-picker-check">
+          <input type="checkbox" id="productionProductPickerPermanent" checked />
+          <span>永久記住此解析名稱的指定方式</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
+        <button id="productionProductPickerSaveBtn" type="button">套用指定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刪除品項 Modal -->
+  <div id="deleteItemModal" class="modal-mask">
+    <div class="modal-box">
+      <h3>刪除品項</h3>
+      <p id="deleteItemText">確定要刪除此品項嗎？</p>
+      <input type="hidden" id="deleteItemId" />
+      <div class="modal-actions">
+        <button class="secondary" id="closeDeleteItemBtn">取消</button>
+        <button class="danger" id="confirmDeleteItemBtn">確認刪除</button>
+      </div>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-auth.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/production.js"></script>
+</body>
+</html>
