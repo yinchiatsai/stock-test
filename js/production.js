@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.7 real update: product-first parser helpers, bracket specs, multi-color filename tokens.
+  // V3.20 stable update based on V3.19: batch mapping, editable quantities, stronger production-file merge, statistics-only items.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -23,10 +23,10 @@
   function loadRuntimeRules() {
     try {
       const raw = localStorage.getItem(RULE_STORAGE_KEY);
-      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {} };
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {}, ...JSON.parse(raw) };
+      if (!raw) return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, ...JSON.parse(raw) };
     } catch (error) {
-      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {}, productManualMappings: {} };
+      return { customSources: {}, customTags: [], ignoredTokens: [], ignoredIssues: [], manualItems: {}, productAliases: {}, statsOnlyProducts: {} };
     }
   }
 
@@ -623,12 +623,6 @@
   }
 
   function applyManualItem(record) {
-    if ((runtimeRules.statsOnlyProducts || {})[record.originalParsedProduct] || (runtimeRules.statsOnlyProducts || {})[record.product]) {
-      record.statsOnly = true;
-      record.stockDetails = [];
-      record.manualNote = "永久僅統計";
-      return record;
-    }
     const manual = runtimeRules.manualItems?.[record.path] || runtimeRules.manualItems?.[record.filename];
     const learned = runtimeRules.productManualMappings?.[record.originalParsedProduct] || runtimeRules.productManualMappings?.[record.product];
     const rule = manual || learned;
@@ -723,6 +717,11 @@
       mergeReason: "",
       countedQuantity: parsed.quantity || 0
     };
+    if (runtimeRules.statsOnlyProducts?.[record.originalParsedProduct] || runtimeRules.statsOnlyProducts?.[record.product]) {
+      record.statsOnly = true;
+      record.stockDetails = [];
+      record.manualNote = "永久僅統計";
+    }
     applyManualItem(record);
     applyProductAlias(record);
     applyIgnoredIssues(record);
@@ -776,8 +775,11 @@
     const groups = new Map();
     records.forEach(record => {
       if (!record.productionAttribute || !record.productionAttributeFamily || record.folderPriority) return;
-      const mergeIdentity = removeProductionAttributesForIdentity(record.identity || stripExtension(record.filename)).replace(/(?:^|[_-])(正|背|反|正面|背面|反面|白|彩|白檔|彩檔|底白|底色|鏡彩|正彩|內|外)(?=$|[_-])/g, "").replace(/[_-]{2,}/g, "_").replace(/^[_-]+|[_-]+$/g, "");
-      const key = `${record.date}|${record.process}|${record.product}|${record.quantity}|${mergeIdentity}|${record.productionAttributeFamily}`;
+      const mergeIdentity = String(record.identity || record.filename || "")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[\s_-]+/g, "")
+        .toLowerCase();
+      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${record.quantity}|${mergeIdentity}|${record.productionAttributeFamily}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(record);
     });
@@ -1065,6 +1067,43 @@
     return map;
   }
 
+  function isStatsOnlyRecord(record, productName = "") {
+    if (!record) return false;
+    if (record.statsOnly) return true;
+    const names = [productName, record.originalParsedProduct, record.originalProduct, record.product].filter(Boolean);
+    return names.some(name => !!runtimeRules.statsOnlyProducts?.[name]);
+  }
+
+  function setStatsOnlyForRecord(record, permanent = false, batch = false) {
+    if (!record) return;
+    const originalName = record.originalParsedProduct || record.originalProduct || record.product || "";
+    const targets = batch ? similarRecords(record) : [record];
+    targets.forEach(r => {
+      r.statsOnly = true;
+      r.stockDetails = [];
+      r.manualNote = "僅統計，不扣庫存";
+    });
+    if (permanent && originalName) {
+      runtimeRules.statsOnlyProducts = { ...(runtimeRules.statsOnlyProducts || {}), [originalName]: true };
+      saveRuntimeRules();
+    }
+  }
+
+  function similarRecordKey(record) {
+    const raw = String(record?.originalParsedProduct || record?.product || record?.filename || "")
+      .replace(/\.[^.]+$/, "")
+      .replace(/(?:資料組|順序|未命名)[ _-]*\d+/gi, m => m.replace(/\d+/g, "#"))
+      .replace(/(?:^|[_ -])\d{1,3}(?=$|[_ -])/g, " #")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+    return raw || String(record?.product || "").toLowerCase();
+  }
+
+  function similarRecords(record) {
+    const key = similarRecordKey(record);
+    return currentSession.records.filter(r => similarRecordKey(r) === key && Number(r.countedQuantity || r.quantity || 0) > 0);
+  }
+
   function recordInventoryMapping(record, productName) {
     const inv = inventoryNameMap();
     const rawDetails = (record?.stockDetails || []).filter(d => Number(d.quantity || 0) > 0 && (!productName || d.item === productName || splitStockItemName(d.item).base === productName));
@@ -1081,6 +1120,8 @@
   }
 
   function productInventoryMappingStatus(productName) {
+    const statsRows = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, productName));
+    if (statsRows.length && statsRows.every(r => isStatsOnlyRecord(r, productName))) return { status: "stats", mappedNames: [], unmappedNames: [], mappedCount: 0, unmappedCount: 0 };
     const rows = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, productName));
     const allMapped = [];
     const allUnmapped = [];
@@ -1096,24 +1137,11 @@
     return { status, mappedNames, unmappedNames, mappedCount: allMapped.length, unmappedCount: allUnmapped.length };
   }
 
-  function isStatsOnlyProduct(productName) {
-    const key = String(productName || "").trim();
-    if (!!(runtimeRules.statsOnlyProducts || {})[key]) return true;
-    return currentSession.records.some(r => r.statsOnly && (r.product === key || r.originalParsedProduct === key));
-  }
-
-  function setStatsOnlyProduct(productName, enabled = true) {
-    const key = String(productName || "").trim();
-    if (!key) return;
-    runtimeRules.statsOnlyProducts = { ...(runtimeRules.statsOnlyProducts || {}) };
-    if (enabled) runtimeRules.statsOnlyProducts[key] = true;
-    else delete runtimeRules.statsOnlyProducts[key];
-    saveRuntimeRules();
-  }
-
   function mappingStatusHtml(productName) {
-    if (isStatsOnlyProduct(productName)) return `<span class="production-map-badge is-stats-only">◎ 僅統計</span><div class="production-map-target">不參與庫存扣減</div>`;
     const state = productInventoryMappingStatus(productName);
+    if (state.status === "stats") {
+      return `<span class="production-map-badge is-mapped">◎ 僅統計</span><div class="production-map-target">不參與庫存扣減</div>`;
+    }
     if (state.status === "mapped") {
       return `<span class="production-map-badge is-mapped">✓ 已對應</span>${state.mappedNames.length ? `<div class="production-map-target">${escapeHtml(state.mappedNames.join("、"))}</div>` : ""}`;
     }
@@ -1205,7 +1233,7 @@
     if (!analysis || !analysis.records?.length) { analyzeStep?.classList.add('is-active'); return; }
     analyzeStep?.classList.add('is-done');
     const hasIssues = (analysis.summary?.issues || []).length > 0;
-    const hasUnmapped = (analysis.summary?.productRows || []).some(row => productInventoryMappingStatus(row.name).status !== "mapped");
+    const hasUnmapped = (analysis.summary?.productRows || []).some(row => !["mapped","stats"].includes(productInventoryMappingStatus(row.name).status));
     if (hasIssues || hasUnmapped) reviewStep?.classList.add('is-active');
     else { reviewStep?.classList.add('is-done'); deductStep?.classList.add('is-active'); }
   }
@@ -1230,10 +1258,12 @@
     box.innerHTML = rows.map(row => {
       const mapping = productInventoryMappingStatus(row.name);
       const warning = issueProducts.has(row.name);
-      const mappingWarning = mapping.status !== "mapped";
+      const statsOnly = mapping.status === "stats";
+      const mappingWarning = !statsOnly && mapping.status !== "mapped";
       if (mappingWarning) unmappedProducts += 1;
-      const statusText = mappingWarning ? "待對應" : warning ? "待確認" : "可扣減";
-      return `<div class="production-deduct-row"><strong>${escapeHtml(row.name)}</strong><span class="production-deduct-qty">-${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}</span><span class="production-deduct-status ${(warning || mappingWarning) ? 'is-warning' : ''}">${statusText}</span></div>`;
+      const statusText = statsOnly ? "僅統計，不扣庫存" : mappingWarning ? "待對應" : warning ? "待確認" : "可扣減";
+      const qtyText = statsOnly ? `${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}` : `-${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}`;
+      return `<div class="production-deduct-row"><strong>${escapeHtml(row.name)}</strong><span class="production-deduct-qty">${qtyText}</span><span class="production-deduct-status ${(warning || mappingWarning) ? 'is-warning' : ''}">${statusText}</span></div>`;
     }).join('');
     const totalQty = rows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
     totals.textContent = `預計扣除 ${rows.length} 個品項，共 ${totalQty} 件`;
@@ -1548,23 +1578,7 @@
   }
 
 
-  let productionPickerState = { recordKey: "", originalName: "", details: [], groupKeys: [], mode: "inventory" };
-
-  function batchPatternKey(record) {
-    const base = stripExtension(record?.filename || "");
-    return base
-      .replace(/([_-]?資料組[ _-]*)?\d+$/i, "$1#")
-      .replace(/([_-])\d+([_-])/g, "$1#$2")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function sameBatchRecords(record) {
-    if (!record) return [];
-    const key = batchPatternKey(record);
-    const rows = currentSession.records.filter(r => batchPatternKey(r) === key && r.date === record.date && r.process === record.process);
-    return rows.length > 1 ? rows : [record];
-  }
+  let productionPickerState = { recordKey: "", originalName: "", details: [], batch: false };
 
   function getInventoryProductOptions() {
     try {
@@ -1637,7 +1651,7 @@
     list.innerHTML = productionPickerState.details.map((d, idx) => `
       <div class="production-picker-row">
         <span>${escapeHtml(d.item)}</span>
-        <strong>${escapeHtml(d.quantity)} ${escapeHtml(d.unit || "件")}</strong>
+        <label style="display:flex;align-items:center;gap:6px">數量 <input class="production-picker-detail-qty" data-index="${idx}" type="number" min="1" step="1" value="${escapeHtml(d.quantity)}" style="width:90px"></label>
         <button type="button" class="secondary small production-picker-remove" data-index="${idx}">移除</button>
       </div>
     `).join("");
@@ -1654,8 +1668,7 @@
     productionPickerState = {
       recordKey: key,
       originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
-      groupKeys: sameBatchRecords(record).map(r => r.path || r.filename),
-      mode: isStatsOnlyProduct(record.product) ? "stats" : "inventory",
+      batch: false,
       details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
         quantity: Number(d.quantity || record.countedQuantity || 1),
@@ -1679,21 +1692,31 @@
     }
     const qty = $("productionProductPickerQty");
     if (qty) qty.value = String(record.countedQuantity || record.quantity || 1);
-    const parsedQty = $("productionProductPickerParsedQty");
-    if (parsedQty) parsedQty.value = String(record.countedQuantity || record.quantity || 1);
-    const batchBox = $("productionProductPickerBatchBox");
-    const batchCheck = $("productionProductPickerBatch");
-    if (batchBox) {
-      const count = productionPickerState.groupKeys.length;
-      batchBox.classList.toggle("hidden", count <= 1);
-      const label = batchBox.querySelector("span");
-      if (label) label.textContent = `套用同組全部 ${count} 個檔案`;
-    }
-    if (batchCheck) batchCheck.checked = productionPickerState.groupKeys.length > 1;
-    const statsCheck = $("productionProductPickerStatsOnly");
-    if (statsCheck) statsCheck.checked = productionPickerState.mode === "stats";
     const permanent = $("productionProductPickerPermanent");
     if (permanent) permanent.checked = true;
+    // V3.20：批次指定與僅統計控制，直接注入既有視窗，不要求更換 index.html。
+    const modal = $("productionProductPickerModal");
+    const saveBtn = $("productionProductPickerSaveBtn");
+    if (modal && saveBtn) {
+      let tools = $("productionPickerV320Tools");
+      if (!tools) {
+        tools = document.createElement("div");
+        tools.id = "productionPickerV320Tools";
+        tools.style.cssText = "margin:14px 0;padding:12px 14px;border:1px solid #dfe8e7;border-radius:14px;background:#f8fbfa;display:grid;gap:10px";
+        saveBtn.parentElement?.insertBefore(tools, saveBtn.parentElement.firstChild);
+      }
+      const count = similarRecords(record).length;
+      tools.innerHTML = `<label style="display:flex;gap:8px;align-items:center"><input id="productionPickerBatch" type="checkbox" ${count > 1 ? "" : "disabled"}> 套用到同組相似檔案${count > 1 ? `（${count} 筆）` : ""}</label><button type="button" class="secondary" id="productionPickerStatsOnlyBtn">設為僅統計，不扣庫存</button><small style="color:#73868a">數量可直接在下方已加入品項中修正；批次套用時會套用相同對應方式。</small>`;
+      $("productionPickerStatsOnlyBtn")?.addEventListener("click", () => {
+        const permanentFlag = !!$("productionProductPickerPermanent")?.checked;
+        const batchFlag = !!$("productionPickerBatch")?.checked;
+        setStatsOnlyForRecord(record, permanentFlag, batchFlag);
+        closeProductionProductPicker();
+        lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+        renderAnalysis(lastAnalysis);
+        updateProductionStatus(batchFlag ? "已將同組檔案設為僅統計，不扣庫存。" : "已設為僅統計，不扣庫存。", "done");
+      });
+    }
     renderProductionPickerList();
     if (typeof openModal === "function") openModal("productionProductPickerModal");
     else $("productionProductPickerModal")?.classList.add("show");
@@ -1851,6 +1874,12 @@ ${record.filename}
 
   function init() {
     if (!$("production")) return;
+    // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
+    document.querySelectorAll("#production *").forEach(el => {
+      if (el.children.length === 0 && /V3\.17 工作流程介面版/.test(el.textContent || "")) {
+        el.textContent = "V3.20 分析整理版：批次指定・數量修正・僅統計；正式扣庫存仍為預覽";
+      }
+    });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
     const startInput = $("productionStartDateInput");
@@ -1933,56 +1962,52 @@ ${record.filename}
       productionPickerState.details.splice(Number(btn.dataset.index), 1);
       renderProductionPickerList();
     });
+    $("productionProductPickerList")?.addEventListener("change", event => {
+      const input = event.target.closest(".production-picker-detail-qty");
+      if (!input) return;
+      const idx = Number(input.dataset.index);
+      const qty = Number(input.value);
+      if (!Number.isFinite(qty) || qty <= 0 || !productionPickerState.details[idx]) {
+        setProductionPickerMessage("數量必須大於 0。", "error");
+        return;
+      }
+      productionPickerState.details[idx].quantity = qty;
+      setProductionPickerMessage("已修正本次計入數量。", "done");
+    });
     $("productionProductPickerCancelBtn")?.addEventListener("click", closeProductionProductPicker);
     $("productionProductPickerSaveBtn")?.addEventListener("click", () => {
       const record = currentSession.records.find(r => (r.path || r.filename) === productionPickerState.recordKey);
       if (!record) return;
-      const statsOnly = !!$("productionProductPickerStatsOnly")?.checked;
-      if (!statsOnly && !productionPickerState.details.length) {
-        setProductionPickerMessage("請至少加入一個庫存品項，或選擇『僅統計，不扣庫存』。", "error");
-        return;
-      }
-      const correctedQty = Number($("productionProductPickerParsedQty")?.value || record.countedQuantity || record.quantity || 1);
-      if (!Number.isFinite(correctedQty) || correctedQty <= 0) {
-        setProductionPickerMessage("請輸入正確的本次計入數量。", "error");
+      if (!productionPickerState.details.length) {
+        setProductionPickerMessage("請至少加入一個庫存品項。", "error");
         return;
       }
       const permanent = !!$("productionProductPickerPermanent")?.checked;
-      const batch = !!$("productionProductPickerBatch")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
       const previousProductRows = lastAnalysis?.summary?.productRows || [];
-      const targetKeys = new Set(batch ? productionPickerState.groupKeys : [productionPickerState.recordKey]);
-      if (statsOnly) {
-        setStatsOnlyProduct(originalName, permanent);
-      } else if (permanent) {
+      if (permanent) {
         runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { details: productionPickerState.details } };
-        setStatsOnlyProduct(originalName, false);
+      } else {
+        runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
       }
+      saveRuntimeRules();
+      const batch = !!$("productionPickerBatch")?.checked;
+      const batchKeys = batch ? new Set(similarRecords(record).map(r => r.path || r.filename)) : new Set();
       currentSession.records.forEach(r => {
-        const key = r.path || r.filename;
-        const sameRecord = targetKeys.has(key);
-        const sameLearnedName = permanent && !batch && (r.originalParsedProduct === originalName || r.product === originalName);
-        if (!(sameRecord || sameLearnedName)) return;
-        if (statsOnly) {
-          r.statsOnly = true;
-          r.stockDetails = [];
-          r.quantity = correctedQty;
-          r.countedQuantity = correctedQty;
-          r.manualNote = permanent ? "永久僅統計" : "本次僅統計";
-        } else {
-          const details = productionPickerState.details.map(d => ({ ...d }));
-          if (details.length === 1) details[0].quantity = correctedQty;
-          applyStockDetailsToRecord(r, details, permanent ? "永久指定" : "本次指定");
-          if (!permanent) runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [key]: { details } };
+        const sameRecord = (r.path || r.filename) === productionPickerState.recordKey;
+        const sameBatch = batch && batchKeys.has(r.path || r.filename);
+        const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
+        if (sameRecord || sameBatch || sameLearnedName) {
+          r.statsOnly = false;
+          applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : (batch ? "本次批次指定" : "本次指定"));
         }
       });
-      saveRuntimeRules();
       closeProductionProductPicker();
       lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
       captureAnalysisChange(previousProductRows, lastAnalysis);
       renderAnalysis(lastAnalysis);
       renderLearningRules();
-      updateProductionStatus(statsOnly ? (permanent ? "已永久設為僅統計，不參與庫存扣減。" : "本次已設為僅統計。") : batch ? `已批次套用 ${productionPickerState.groupKeys.length} 個同組檔案。` : permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
+      updateProductionStatus(permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
     });
     $("productionProductViewAllBtn")?.addEventListener("click", () => {
       productViewMode = "all";
