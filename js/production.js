@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.42 production analyzer; real inventory deduction supports negative stock with warning and reversible transaction history; completed transaction UI refined.
+  // V3.43 production analyzer; real inventory deduction supports negative stock with warning and reversible transaction history; completed transaction UI refined.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1903,14 +1903,22 @@
     box.className = "production-transaction-status is-active";
     box.innerHTML = `
       <div class="production-transaction-head">
-        <div>
-          <strong class="production-transaction-title">✓ 已完成扣庫存</strong>
-          <span class="production-transaction-time">${escapeHtml(tx.createdAtText || "")}</span>
+        <div class="production-transaction-heading">
+          <span class="production-transaction-check" aria-hidden="true">✓</span>
+          <div>
+            <strong class="production-transaction-title">扣庫存完成</strong>
+            <span class="production-transaction-time">${escapeHtml(tx.createdAtText || "")}</span>
+          </div>
         </div>
-        <div class="production-transaction-summary">本次共扣除 <strong>${txItems.length}</strong> 個品項・<strong>${totalQty}</strong> 件</div>
+        <div class="production-transaction-metrics">
+          <div class="production-transaction-metric"><span>庫存品項</span><strong>${txItems.length}</strong></div>
+          <div class="production-transaction-metric"><span>共扣除</span><strong>${totalQty}<small> 件</small></strong></div>
+        </div>
       </div>
+      <div class="production-transaction-divider"></div>
       <div class="production-transaction-items">${itemRows}</div>
       <div class="production-transaction-actions">
+        <span class="production-transaction-action-note">需要取消這次測試時，可將本次扣除完整加回。</span>
         <button type="button" class="secondary" id="productionUndoDeductBtn">復原此次扣庫存</button>
       </div>`;
     $("productionUndoDeductBtn")?.addEventListener("click", undoProductionDeduction);
@@ -1939,6 +1947,18 @@
     const plan = buildDeductionPlan(analysis);
     const existingTx = latestActiveSessionTransaction();
 
+    const deductFooter = button?.closest('.production-deduct-footer');
+    if (existingTx?.status === "active") {
+      box.className = 'production-deduct-preview-empty hidden';
+      box.innerHTML = '';
+      totals.textContent = '';
+      if (deductFooter) deductFooter.classList.add('hidden');
+      badge.className = 'production-preview-badge is-ready';
+      badge.textContent = '✓ 扣庫存完成';
+      renderProductionTransactionStatus();
+      return;
+    }
+    if (deductFooter) deductFooter.classList.remove('hidden');
     box.className = 'production-deduct-list';
     if (!plan.rows.length) {
       box.innerHTML = `<div class="production-deduct-preview-empty">目前沒有需要扣除的庫存品項。</div>`;
@@ -2747,7 +2767,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.42 扣庫存完成紀錄 UI 優化";
+      el.textContent = "V3.43 扣庫存完成紀錄 UI 優化";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2787,7 +2807,7 @@ ${record.filename}
       }
     });
 
-    // V3.42：保留 V3.41 資料夾選取/拖曳一致邏輯；本版優化扣庫存完成紀錄 UI。
+    // V3.43：保留 V3.41 資料夾選取/拖曳一致邏輯；本版優化扣庫存完成紀錄 UI。
     // 過去選取資料夾只更新提示文字，沒有加入 droppedProductionEntries，
     // 因此右側「本次生產資料」看不到批次。現在統一加入、去重、顯示待分析狀態。
     function addEntriesToProductionQueue(incoming, sourceLabel = "資料夾") {
