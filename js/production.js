@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.33 production analyzer; adds clear pending/analyzed folder progress and analyzes only newly added dragged files.
+  // V3.34 production analyzer; collapsible warning panel with actionable-vs-informational issue separation.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -72,6 +72,8 @@
   let droppedProductionEntries = [];
   // 已完成分析的拖曳來源檔；同一工作階段再次按分析時只處理新增檔案。
   let analyzedDroppedEntryKeys = new Set();
+  let droppedBatchDuplicateCounts = new Map();
+  let droppedBatchLastAddedAt = new Map();
 
   function createEmptySession() {
     return {
@@ -909,20 +911,29 @@
     return String(entry?.path || entry?.sourceSignature || entry?.filename || "").replace(/^\/+/, "");
   }
 
+  function productionBatchInfo(entry) {
+    const parts = splitPath(entry?.path || entry?.filename || "");
+    const folder = parts.length > 1 ? parts[0] : "單一檔案";
+    const date = inferDateFromPath(parts) || "無日期";
+    const process = inferProcess(parts, date) || "未指定";
+    const key = `${folder}|${date}|${process}`;
+    return { key, folder, date, process };
+  }
+
   function droppedFolderStates(entries = droppedProductionEntries) {
     const groups = new Map();
     (entries || []).forEach(entry => {
-      const parts = splitPath(entry.path || entry.filename);
-      const date = inferDateFromPath(parts) || "無日期";
-      const process = inferProcess(parts, date) || "未指定";
-      const key = `${date}|${process}`;
-      if (!groups.has(key)) groups.set(key, { key, date, process, total: 0, analyzed: 0, pending: 0 });
-      const group = groups.get(key);
+      const info = productionBatchInfo(entry);
+      if (!groups.has(info.key)) groups.set(info.key, { ...info, total: 0, analyzed: 0, pending: 0, duplicateAttempts: droppedBatchDuplicateCounts.get(info.key) || 0, lastAddedAt: droppedBatchLastAddedAt.get(info.key) || "" });
+      const group = groups.get(info.key);
       group.total += 1;
       if (analyzedDroppedEntryKeys.has(productionEntryKey(entry))) group.analyzed += 1;
       else group.pending += 1;
     });
-    return Array.from(groups.values()).sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant"));
+    return Array.from(groups.values()).sort((a, b) => {
+      if ((a.pending > 0) !== (b.pending > 0)) return a.pending > 0 ? -1 : 1;
+      return (b.lastAddedAt || "").localeCompare(a.lastAddedAt || "") || (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant");
+    });
   }
 
   function renderDroppedFolderSummary() {
@@ -1334,35 +1345,41 @@
     const states = droppedFolderStates();
     const analyzedCount = states.reduce((sum, g) => sum + g.analyzed, 0);
     const pendingCount = states.reduce((sum, g) => sum + g.pending, 0);
+    const pendingBatches = states.filter(g => g.pending > 0);
+    const analyzedBatches = states.filter(g => g.pending === 0);
     if (labelEl) {
-      if (states.length) labelEl.textContent = pendingCount ? `${states.length} 批｜已分析 ${analyzedCount} 檔｜待分析 ${pendingCount} 檔` : `${states.length} 批｜全部分析完成`;
+      if (states.length) labelEl.textContent = `${states.length} 批｜待分析 ${pendingBatches.length} 批・${pendingCount} 檔｜已分析 ${analyzedBatches.length} 批・${analyzedCount} 檔`;
       else labelEl.textContent = currentSession.label || "尚未建立";
     }
     if (!listEl) return;
 
     if (states.length) {
-      listEl.innerHTML = states.map(source => {
+      const rowHtml = source => {
         const isDone = source.pending === 0;
         const isPartial = source.analyzed > 0 && source.pending > 0;
-        const statusText = isDone ? "✓ 已分析" : (isPartial ? "● 有新增待分析" : "● 待分析");
+        const statusText = isDone ? "✓ 已分析・待扣庫存" : (isPartial ? "● 有新增待分析" : "● 待分析");
         const countText = isDone ? `${source.total} 檔` : (isPartial ? `${source.analyzed} 已分析＋${source.pending} 待分析` : `${source.pending} 檔待分析`);
+        const dup = source.duplicateAttempts ? `<span class="production-session-duplicate">重複加入 ${source.duplicateAttempts} 檔・已略過</span>` : "";
         return `
           <div class="production-session-item ${isDone ? "is-analyzed" : "is-pending"}" data-key="${escapeHtml(source.key)}">
-            <span class="production-session-main"><b class="production-session-status">${statusText}</b><span>${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span></span>
-            <span class="production-session-actions"><strong>${escapeHtml(countText)}</strong>${isDone ? `<button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改名稱</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button>` : ""}</span>
+            <span class="production-session-main"><b class="production-session-status">${statusText}</b><span class="production-session-folder"><strong>${escapeHtml(source.folder)}</strong><small>${escapeHtml(source.date)}｜${escapeHtml(source.process)}</small>${dup}</span></span>
+            <span class="production-session-actions"><strong>${escapeHtml(countText)}</strong></span>
           </div>`;
-      }).join("");
+      };
+      const pendingHtml = pendingBatches.length ? `<div class="production-session-group"><div class="production-session-group-title"><strong>等待分析</strong><span>${pendingBatches.length} 批｜${pendingCount} 檔</span></div>${pendingBatches.map(rowHtml).join("")}</div>` : `<div class="production-session-empty-state is-done">✓ 目前沒有等待分析的資料</div>`;
+      const analyzedHtml = analyzedBatches.length ? `<details class="production-session-completed" ${pendingBatches.length ? "" : "open"}><summary><strong>已分析</strong><span>${analyzedBatches.length} 批｜${analyzedCount} 檔</span></summary>${analyzedBatches.map(rowHtml).join("")}</details>` : "";
+      listEl.innerHTML = pendingHtml + analyzedHtml + `<div class="production-session-footnote">目前正式扣庫存尚未啟用；之後扣庫完成的批次會保留在「已完成」紀錄，不會立即消失。</div>`;
       return;
     }
 
     if (!currentSession.sources.length) {
-      listEl.innerHTML = "加入資料夾後會顯示「待分析／已分析」進度。";
+      listEl.innerHTML = "加入資料夾後，這裡會列出每個資料夾的名稱、待分析／已分析狀態與重複加入提示。";
       return;
     }
     listEl.innerHTML = currentSession.sources.map(source => `
       <div class="production-session-item is-analyzed" data-key="${escapeHtml(source.key)}">
-        <span class="production-session-main"><b class="production-session-status">✓ 已分析</b><span>${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span></span>
-        <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong><button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改名稱</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button></span>
+        <span class="production-session-main"><b class="production-session-status">✓ 已分析・待扣庫存</b><span>${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span></span>
+        <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong></span>
       </div>
     `).join("");
   }
@@ -1382,7 +1399,7 @@
     lastProductChanges = new Map();
     renderSessionPanel();
     $("productionSummaryCards").innerHTML = '<div class="production-summary-empty">尚未分析</div>';
-    ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueResult"].forEach(id => {
+    ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueActionResult", "productionIssueInfoResult"].forEach(id => {
       const el = $(id);
       if (el) el.textContent = "尚未分析";
     });
@@ -1397,12 +1414,13 @@
     const totalFiles = analysis.records.length;
     const totalQty = analysis.records.reduce((sum, r) => sum + (r.countedQuantity || 0), 0);
     const products = analysis.summary.productRows.length;
-    const issues = analysis.summary.issues.length;
+    const issues = actionableIssues(analysis).length;
+    const infoIssues = informationalIssues(analysis).length;
     $("productionSummaryCards").innerHTML = [
       ["掃描檔案", totalFiles],
       ["計算數量", totalQty],
       ["商品種類", products],
-      ["解析警告", issues]
+      ["需處理警告", issues + (infoIssues ? `｜提示 ${infoIssues}` : "")]
     ].map(([label, value]) => `<div class="production-summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
   }
 
@@ -1612,9 +1630,26 @@
     row.insertAdjacentElement("afterend", detailRow);
   }
 
+  function isInformationalIssueText(issueText) {
+    return /舊式尾端數量/.test(String(issueText || ""));
+  }
+
+  function issueSeverity(record) {
+    const issueText = (record?.issues || []).join("；");
+    return isInformationalIssueText(issueText) ? "info" : "action";
+  }
+
+  function actionableIssues(analysis) {
+    return (analysis?.summary?.issues || []).filter(record => issueSeverity(record) === "action");
+  }
+
+  function informationalIssues(analysis) {
+    return (analysis?.summary?.issues || []).filter(record => issueSeverity(record) === "info");
+  }
+
   function reviewSuggestion(record) {
     const issueText = (record.issues || []).join("；");
-    if (/舊式尾端數量/.test(issueText)) return "已可計算；可按『保持原格式（仍計算）』，或之後改成 (x數量)";
+    if (/舊式尾端數量/.test(issueText)) return "✓ 已計入，不需操作；若方便，未來可改成 (x數量)";
     if (/數量格式/.test(issueText)) return "請修正 (x數量)，例如 (x20)";
     if (/缺少商品|無法判斷商品/.test(issueText)) return "可按『指定商品』補上本次商品名稱";
     if (/未知開頭標記/.test(issueText)) return "可直接加入標籤、來源或忽略";
@@ -1634,7 +1669,7 @@
       buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="manual-product" data-file="${escapeHtml(record.filename)}">指定商品</button>`);
     }
     if (/舊式尾端數量/.test(issueText)) {
-      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="ignore-warning" data-file="${escapeHtml(record.filename)}" data-issue="${escapeHtml((record.issues || [])[0] || "")}">保持原格式（仍計算）</button>`);
+      buttons.push(`<span class="production-info-no-action">已計入，不需操作</span>`);
     }
     return buttons.join(" ") || "請依建議修正檔名後重新分析";
   }
@@ -1649,7 +1684,7 @@
     if (!analysis || !analysis.records?.length) { analyzeStep?.classList.add('is-active'); simpleSteps[0]?.classList.add('is-active'); return; }
     analyzeStep?.classList.add('is-done');
     simpleSteps[0]?.classList.add('is-done');
-    const hasIssues = (analysis.summary?.issues || []).length > 0;
+    const hasIssues = actionableIssues(analysis).length > 0;
     const hasUnmapped = (analysis.summary?.productRows || []).some(row => !["mapped","stats"].includes(productInventoryMappingStatus(row.name).status));
     if (hasIssues || hasUnmapped) { reviewStep?.classList.add('is-active'); simpleSteps[1]?.classList.add('is-active'); }
     else { reviewStep?.classList.add('is-done'); deductStep?.classList.add('is-active'); simpleSteps[1]?.classList.add('is-done'); simpleSteps[2]?.classList.add('is-active'); }
@@ -1661,7 +1696,7 @@
     const badge = $('productionDeductReadyBadge');
     if (!box || !totals || !badge) return;
     const rows = analysis?.summary?.productRows || [];
-    const issueProducts = new Set((analysis?.summary?.issues || []).map(i => i.product));
+    const issueProducts = new Set(actionableIssues(analysis).map(i => i.product));
     if (!rows.length) {
       box.className = 'production-deduct-preview-empty';
       box.textContent = '完成分析後會顯示預計扣除的庫存品項。';
@@ -1686,7 +1721,7 @@
     const statsRows = rows.filter(row => productInventoryMappingStatus(row.name).status === "stats");
     const totalQty = deductRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
     totals.textContent = `可扣 ${deductRows.length} 個品項，共 ${totalQty} 件${statsRows.length ? `｜僅統計 ${statsRows.length} 項` : ""}`;
-    const issueCount = (analysis.summary?.issues || []).length;
+    const issueCount = actionableIssues(analysis).length;
     const hasIssues = issueCount > 0 || unmappedProducts > 0;
     badge.className = `production-preview-badge ${hasIssues ? 'is-warning' : 'is-ready'}`;
     badge.textContent = unmappedProducts > 0 ? `尚有 ${unmappedProducts} 個商品待對應庫存` : issueCount > 0 ? `尚有 ${issueCount} 筆解析警告` : '已可進入扣庫存預覽';
@@ -1768,14 +1803,35 @@
       { label: "檔名", key: "filename" }
     ], "尚無明細");
 
-    renderSimpleTable($("productionIssueResult"), analysis.summary.issues, [
+    const actionIssues = actionableIssues(analysis);
+    const infoIssues = informationalIssues(analysis);
+    const actionCountEl = $("productionIssueActionCount");
+    const infoCountEl = $("productionIssueInfoCount");
+    const infoSummaryEl = $("productionIssueInfoSummary");
+    if (actionCountEl) {
+      actionCountEl.textContent = actionIssues.length ? `需要處理 ${actionIssues.length} 筆` : "✓ 無需處理";
+      actionCountEl.classList.toggle("is-clear", actionIssues.length === 0);
+    }
+    if (infoCountEl) infoCountEl.textContent = infoIssues.length ? `格式提示 ${infoIssues.length} 筆` : "";
+    if (infoSummaryEl) infoSummaryEl.textContent = infoIssues.length ? `${infoIssues.length} 筆｜皆已成功計入，不需要操作` : "目前沒有格式提示";
+
+    renderSimpleTable($("productionIssueActionResult"), actionIssues, [
       { label: "狀態", render: () => "需確認" },
       { label: "商品", key: "product" },
       { label: "原因", render: r => r.issues.join("；") },
       { label: "建議處理", render: reviewSuggestion },
       { label: "操作", render: renderIssueActions, html: true },
       { label: "檔名", key: "filename" }
-    ], "目前沒有解析警告");
+    ], "✓ 目前沒有需要處理的解析問題");
+
+    renderSimpleTable($("productionIssueInfoResult"), infoIssues, [
+      { label: "狀態", html: true, render: () => `<span class="production-info-status">✓ 已計入</span>` },
+      { label: "商品", key: "product" },
+      { label: "提示", render: r => r.issues.join("；") },
+      { label: "目前結果", render: reviewSuggestion },
+      { label: "操作", html: true, render: () => `<span class="production-info-no-action">不需操作</span>` },
+      { label: "檔名", key: "filename" }
+    ], "目前沒有格式提示");
 
     $("productionExportCsvBtn").disabled = false;
   }
@@ -2348,7 +2404,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.33 新增資料分析進度｜正式扣庫存尚未啟用";
+      el.textContent = "V3.34 解析警告收合與分級｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2422,13 +2478,26 @@ ${record.filename}
         updateProductionStatus("沒有讀到可分析的檔案；請確認拖入的是資料夾。", "idle");
         return;
       }
+      const existingKeys = new Set(droppedProductionEntries.map(productionEntryKey));
+      const incomingUnique = dedupeProductionEntries(incoming);
+      const now = new Date().toISOString();
+      let duplicateCount = 0;
+      incomingUnique.forEach(entry => {
+        const batch = productionBatchInfo(entry);
+        droppedBatchLastAddedAt.set(batch.key, now);
+        if (existingKeys.has(productionEntryKey(entry))) {
+          duplicateCount += 1;
+          droppedBatchDuplicateCounts.set(batch.key, (droppedBatchDuplicateCounts.get(batch.key) || 0) + 1);
+        }
+      });
       const before = droppedProductionEntries.length;
-      droppedProductionEntries = dedupeProductionEntries([...droppedProductionEntries, ...incoming]);
+      droppedProductionEntries = dedupeProductionEntries([...droppedProductionEntries, ...incomingUnique]);
       const added = droppedProductionEntries.length - before;
       renderDroppedFolderSummary();
       renderSessionPanel();
       const pending = droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry))).length;
-      updateProductionStatus(`已加入 ${added} 個新檔案；目前有 ${pending} 個檔案待分析。`, "done");
+      const duplicateText = duplicateCount ? `；另有 ${duplicateCount} 個重複檔案已自動略過` : "";
+      updateProductionStatus(`已加入 ${added} 個新檔案${duplicateText}；目前有 ${pending} 個檔案待分析。`, "done");
     });
 
     renderSessionPanel();
@@ -2437,7 +2506,7 @@ ${record.filename}
     updateProductionStatus("尚未開始分析。請先加入資料夾，再按「分析新增資料」。", "idle");
     renderLearningRules();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
-    $("productionIssueResult")?.addEventListener("click", handleIssueAction);
+    $("productionIssuePanel")?.addEventListener("click", handleIssueAction);
     $("productionSessionList")?.addEventListener("click", handleSessionAction);
     $("productionProductResult")?.addEventListener("click", event => {
       if (event.target.closest(".production-record-remove-btn, .production-record-product-btn")) {
@@ -2570,6 +2639,8 @@ ${record.filename}
       if (fileInput) fileInput.value = "";
       droppedProductionEntries = [];
       analyzedDroppedEntryKeys = new Set();
+      droppedBatchDuplicateCounts = new Map();
+      droppedBatchLastAddedAt = new Map();
       const folderText = $("productionSelectedFolderText");
       if (folderText) folderText.textContent = "尚未加入資料夾";
       renderSessionPanel();
