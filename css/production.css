@@ -1711,3 +1711,50 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
   .production-transaction-action-note{order:2;text-align:center}
   .production-transaction-actions button{order:1;width:100%;min-height:44px;margin:0}
 }
+
+/* V3.45｜每次確認扣庫存＝一筆獨立、可復原交易 */
+.production-transaction-history{
+  margin-top:18px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  display:block!important;
+}
+.production-transaction-history.hidden{display:none!important}
+.production-transaction-history-head{
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  margin:0 2px 10px!important;
+  color:#29484e;
+}
+.production-transaction-history-head strong{font-size:15px;font-weight:900}
+.production-transaction-history-head span{font-size:11px;color:#839295;font-weight:700}
+.production-transaction-history-list{display:grid!important;gap:12px!important}
+.production-transaction-card{
+  border:1px solid #dce9e5;
+  border-radius:18px;
+  background:#fff;
+  padding:18px 20px;
+  box-shadow:0 7px 22px rgba(45,72,76,.045);
+}
+.production-transaction-card.is-active{border-color:#cfe4dc;background:linear-gradient(180deg,#fbfefd 0%,#fff 100%)}
+.production-transaction-card.is-reverted{background:#f8f9f9;border-color:#e1e7e6;opacity:.82}
+.production-transaction-card .production-transaction-head{margin:0}
+.production-transaction-card .production-transaction-metrics{gap:8px!important}
+.production-transaction-card .production-transaction-metric{min-width:92px}
+.production-transaction-card .production-transaction-metric:first-child{min-width:118px}
+.production-transaction-card.is-reverted .production-transaction-item-qty{color:#879496}
+.production-transaction-card .production-transaction-actions{margin-top:16px}
+.production-transaction-card .production-undo-deduct-btn{white-space:nowrap}
+@media(max-width:760px){
+  .production-transaction-history{margin-top:14px!important}
+  .production-transaction-history-head{display:grid!important;gap:3px!important;margin-bottom:8px!important}
+  .production-transaction-history-head span{font-size:10px}
+  .production-transaction-card{padding:15px 14px;border-radius:16px}
+  .production-transaction-card .production-transaction-metrics{grid-template-columns:1fr 1fr!important}
+  .production-transaction-card .production-transaction-metric:first-child{grid-column:1/-1;min-width:0}
+  .production-transaction-card .production-transaction-metric{min-width:0}
+  .production-transaction-card .production-transaction-actions{margin-top:12px}
+}
