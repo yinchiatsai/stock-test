@@ -67,7 +67,7 @@
   let lastProductChanges = new Map();
   let learningSearchTerm = "";
   let selectedProductName = "";
-  // V3.25: 拖曳進來的多資料夾檔案，獨立於原生 file input 保存。
+  // V3.26: 拖曳進來的多資料夾檔案，獨立於原生 file input 保存。
   let droppedProductionEntries = [];
 
   function createEmptySession() {
@@ -211,7 +211,18 @@
   }
 
   function parseProductAndQty(rawText) {
-    let text = firstProductionPart(rawText).trim();
+    const normalizedRaw = String(rawText || "").replace(/＿/g, "_").trim();
+    const rawParts = normalizedRaw.split("_").map(x => x.trim()).filter(Boolean);
+    let text = firstProductionPart(normalizedRaw).trim();
+
+    // 支援「商品_(規格)x數量_客人_製作屬性」命名。
+    // 括號前若以底線分隔，仍視為商品規格的一部分；例如：樟木杯墊_(方)x4。
+    if (rawParts.length >= 2) {
+      const specQtyPart = rawParts[1];
+      if (/^[（(][^()（）]+[）)]\s*[xX×]\s*\d+$/.test(specQtyPart)) {
+        text = `${rawParts[0]}${specQtyPart}`;
+      }
+    }
     const issues = [];
     if (!text) {
       return { product: "", quantity: 0, unitHint: "件", colors: [], qtyMode: "error", issues: ["缺少商品名稱"] };
@@ -505,7 +516,7 @@
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     const candidates = pathParts.slice(0, -1).filter(Boolean);
     const idx = candidates.findIndex(p => p === dateValue || datePattern.test(p));
-    // V3.25：支援「日期/製程/檔案」以及「製程/日期/檔案」兩種常見結構。
+    // V3.26：支援「日期/製程/檔案」以及「製程/日期/檔案」兩種常見結構。
     if (idx >= 0 && idx < candidates.length - 1) return candidates[idx + 1] || "未指定";
     if (idx > 0) return candidates[idx - 1] || "未指定";
     // 沒有日期資料夾時，最靠近檔案的資料夾視為製程名稱。
@@ -2030,7 +2041,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.25 多資料夾拖曳｜正式扣庫存尚未啟用";
+      el.textContent = "V3.26 多資料夾拖曳｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
