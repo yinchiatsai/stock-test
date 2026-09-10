@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.28 production analyzer; separates inventory mapping from filename parsing warnings and auto-clears resolved product parsing issues.
+  // V3.29 production analyzer; mapping quantities are final integer overrides (no per-unit stacking/decimal deduction).
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -680,8 +680,8 @@
       const details = (rule.details || []).map(d => ({
         ...d,
         quantity: rule.mode === "per-unit"
-          ? Number(d.perUnitQty ?? d.quantity ?? 1) * baseQty
-          : Number(d.quantity || 1)
+          ? Math.max(1, Math.round(Number(d.perUnitQty ?? d.quantity ?? 1) * baseQty))
+          : Math.max(1, Math.round(Number(d.quantity || 1)))
       }));
       applyStockDetailsToRecord(record, details, manual ? "本次人工指定" : "永久指定");
       return record;
@@ -1558,8 +1558,9 @@
 
   function learnedRuleTargetText(details = [], mode = "") {
     return details.map(detail => {
-      const qty = mode === "per-unit" ? Number(detail.perUnitQty ?? detail.quantity ?? 1) : Number(detail.quantity || 1);
-      const suffix = mode === "per-unit" ? ` × ${qty}/件` : (qty !== 1 ? ` × ${qty}` : "");
+      const rawQty = mode === "per-unit" ? Number(detail.perUnitQty ?? detail.quantity ?? 1) : Number(detail.quantity || 1);
+      const qty = Number.isFinite(rawQty) ? Math.max(1, Math.round(rawQty)) : 1;
+      const suffix = qty !== 1 ? ` × ${qty}` : "";
       return `${detail.item}${suffix}`;
     }).join("、") || "未指定";
   }
@@ -1808,8 +1809,8 @@
       setProductionPickerMessage("請先搜尋並點選正式庫存品項。", "error");
       return;
     }
-    if (!Number.isFinite(qty) || qty <= 0) {
-      setProductionPickerMessage("請輸入正確數量。", "error");
+    if (!Number.isInteger(qty) || qty <= 0) {
+      setProductionPickerMessage("扣除數量請輸入大於 0 的整數。", "error");
       return;
     }
     productionPickerState.details.push({ item: cleanName, quantity: qty, unit: "件", note: "人工指定" });
@@ -1851,7 +1852,7 @@
     list.innerHTML = productionPickerState.details.map((d, idx) => `
       <div class="production-picker-row">
         <div class="production-picker-item-name">${escapeHtml(d.item)}</div>
-        <label class="production-picker-row-qty"><span>扣除</span><input class="production-picker-detail-qty" data-index="${idx}" type="number" min="0.01" step="0.01" value="${escapeHtml(d.quantity)}"></label>
+        <label class="production-picker-row-qty"><span>扣除</span><input class="production-picker-detail-qty" data-index="${idx}" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(Math.max(1, Math.round(Number(d.quantity || 1))))}"></label>
         <button type="button" class="secondary small production-picker-remove" data-index="${idx}">移除</button>
       </div>
     `).join("");
@@ -1872,7 +1873,7 @@
       baseQty,
       details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
-        quantity: Number(d.quantity || baseQty),
+        quantity: Math.max(1, Math.round(Number(d.quantity || baseQty))),
         unit: d.unit || record.unit || "件",
         variant: d.variant || "",
         note: "人工指定"
@@ -1914,7 +1915,7 @@
     const cleanDetails = details.map(d => ({
       item: String(d.item || "").trim(),
       variant: splitStockItemName(d.item).variant || d.variant || "",
-      quantity: Number(d.quantity || 1),
+      quantity: Math.max(1, Math.round(Number(d.quantity || 1))),
       unit: d.unit || record.unit || "件",
       note: note || "人工指定"
     })).filter(d => d.item && Number(d.quantity) > 0);
@@ -2089,7 +2090,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.28 解析警告分流｜正式扣庫存尚未啟用";
+      el.textContent = "V3.29 對應數量整數覆蓋｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2210,8 +2211,9 @@ ${record.filename}
       if (!input) return;
       const idx = Number(input.dataset.index);
       const qty = Number(input.value);
-      if (!Number.isFinite(qty) || qty <= 0 || !productionPickerState.details[idx]) {
-        setProductionPickerMessage("數量必須大於 0。", "error");
+      if (!Number.isInteger(qty) || qty <= 0 || !productionPickerState.details[idx]) {
+        input.value = productionPickerState.details[idx] ? String(productionPickerState.details[idx].quantity) : "1";
+        setProductionPickerMessage("扣除數量只能輸入大於 0 的整數。", "error");
         return;
       }
       productionPickerState.details[idx].quantity = qty;
@@ -2243,12 +2245,11 @@ ${record.filename}
       if (permanent) {
         const ruleDetails = productionPickerState.details.map(d => ({
           item: d.item,
-          perUnitQty: Number(d.quantity || 0) / baseQty,
-          quantity: Number(d.quantity || 0) / baseQty,
+          quantity: Math.max(1, Math.round(Number(d.quantity || 1))),
           unit: d.unit || record.unit || "件",
           note: "永久指定"
         }));
-        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { mode: "per-unit", details: ruleDetails } };
+        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { mode: "fixed", details: ruleDetails } };
       } else {
         runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
       }
@@ -2259,9 +2260,8 @@ ${record.filename}
         if (sameRecord || sameLearnedName) {
           r.statsOnly = false;
           if (sameLearnedName && permanent) {
-            const rBaseQty = Number(r.countedQuantity || r.quantity || 1) || 1;
-            const scaled = productionPickerState.details.map(d => ({ ...d, quantity: (Number(d.quantity || 0) / baseQty) * rBaseQty }));
-            applyStockDetailsToRecord(r, scaled, "永久指定");
+            const finalDetails = productionPickerState.details.map(d => ({ ...d, quantity: Math.max(1, Math.round(Number(d.quantity || 1))) }));
+            applyStockDetailsToRecord(r, finalDetails, "永久指定");
           } else {
             applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
           }
