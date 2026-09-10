@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.37 production analyzer; root-folder batches, compact date parsing, and session-local analyze action.
+  // V3.38 production analyzer; supports date/batch prefixes in production filenames without treating them as product names.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -115,6 +115,44 @@
 
   function firstProductionPart(base) {
     return String(base || "").replace(/＿/g, "_").split("_")[0].trim();
+  }
+
+  function stripFilenameDateBatchPrefix(text) {
+    let value = String(text || "").replace(/＿/g, "_").trim();
+    const parts = value.split("_");
+    if (!parts.length) return value;
+
+    const token = String(parts[0] || "").trim();
+    let isDateToken = false;
+
+    // MMDD，例如 0903
+    if (/^\d{4}$/.test(token)) {
+      const month = Number(token.slice(0, 2));
+      const day = Number(token.slice(2, 4));
+      isDateToken = month >= 1 && month <= 12 && day >= 1 && day <= 31;
+    }
+
+    // 民國 YYYMMDD，例如 1150909
+    if (!isDateToken && /^\d{7}$/.test(token)) {
+      const month = Number(token.slice(3, 5));
+      const day = Number(token.slice(5, 7));
+      isDateToken = month >= 1 && month <= 12 && day >= 1 && day <= 31;
+    }
+
+    // 西元 YYYYMMDD，例如 20260910
+    if (!isDateToken && /^\d{8}$/.test(token)) {
+      const year = Number(token.slice(0, 4));
+      const month = Number(token.slice(4, 6));
+      const day = Number(token.slice(6, 8));
+      isDateToken = year >= 2000 && year <= 2199 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+    }
+
+    if (!isDateToken) return value;
+
+    // 日期後若緊接純數字批次（例：0903_02_商品），一起略過。
+    let startIndex = 1;
+    if (parts.length > 2 && /^\d{1,3}$/.test(String(parts[1] || "").trim())) startIndex = 2;
+    return parts.slice(startIndex).join("_").trim();
   }
 
   function stripLeadingTokens(text) {
@@ -637,7 +675,10 @@
 
   function parseFullName(name) {
     const base = stripExtension(name);
-    const leading = stripLeadingTokens(base);
+    // V3.38：部分製程資料的每個檔名都固定以前綴「日期_批次_」開頭。
+    // 例如 0903_02_U型袋(小)_單_...；日期/批次只作識別資訊，不參與商品名稱解析。
+    const baseWithoutDateBatch = stripFilenameDateBatchPrefix(base);
+    const leading = stripLeadingTokens(baseWithoutDateBatch);
     const classified = classifyTokens(leading.tokens);
     const parsed = parseProductAndQty(leading.rest);
     return {
@@ -2445,7 +2486,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.37 批次根資料夾與分析操作優化｜正式扣庫存尚未啟用";
+      el.textContent = "V3.38 檔名日期批次前綴解析修正｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
