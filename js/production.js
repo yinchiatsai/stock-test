@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.20 stable update based on V3.19: batch mapping, editable quantities, stronger production-file merge, statistics-only items.
+  // V3.21 simplified production-deduction workbench; keeps V3.20 parsing, merge, mapping and learning logic.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1230,12 +1230,15 @@
     const reviewStep = document.querySelector('.production-flow-step[data-step="review"]');
     const deductStep = document.querySelector('.production-flow-step[data-step="deduct"]');
     [analyzeStep, reviewStep, deductStep].forEach(el => el?.classList.remove('is-active','is-done'));
-    if (!analysis || !analysis.records?.length) { analyzeStep?.classList.add('is-active'); return; }
+    const simpleSteps = document.querySelectorAll('.production-simple-steps span');
+    simpleSteps.forEach(el => el.classList.remove('is-active','is-done'));
+    if (!analysis || !analysis.records?.length) { analyzeStep?.classList.add('is-active'); simpleSteps[0]?.classList.add('is-active'); return; }
     analyzeStep?.classList.add('is-done');
+    simpleSteps[0]?.classList.add('is-done');
     const hasIssues = (analysis.summary?.issues || []).length > 0;
     const hasUnmapped = (analysis.summary?.productRows || []).some(row => !["mapped","stats"].includes(productInventoryMappingStatus(row.name).status));
-    if (hasIssues || hasUnmapped) reviewStep?.classList.add('is-active');
-    else { reviewStep?.classList.add('is-done'); deductStep?.classList.add('is-active'); }
+    if (hasIssues || hasUnmapped) { reviewStep?.classList.add('is-active'); simpleSteps[1]?.classList.add('is-active'); }
+    else { reviewStep?.classList.add('is-done'); deductStep?.classList.add('is-active'); simpleSteps[1]?.classList.add('is-done'); simpleSteps[2]?.classList.add('is-active'); }
   }
 
   function renderDeductPreview(analysis) {
@@ -1265,8 +1268,10 @@
       const qtyText = statsOnly ? `${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}` : `-${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}`;
       return `<div class="production-deduct-row"><strong>${escapeHtml(row.name)}</strong><span class="production-deduct-qty">${qtyText}</span><span class="production-deduct-status ${(warning || mappingWarning) ? 'is-warning' : ''}">${statusText}</span></div>`;
     }).join('');
-    const totalQty = rows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
-    totals.textContent = `預計扣除 ${rows.length} 個品項，共 ${totalQty} 件`;
+    const deductRows = rows.filter(row => productInventoryMappingStatus(row.name).status !== "stats");
+    const statsRows = rows.filter(row => productInventoryMappingStatus(row.name).status === "stats");
+    const totalQty = deductRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
+    totals.textContent = `可扣 ${deductRows.length} 個品項，共 ${totalQty} 件${statsRows.length ? `｜僅統計 ${statsRows.length} 項` : ""}`;
     const issueCount = (analysis.summary?.issues || []).length;
     const hasIssues = issueCount > 0 || unmappedProducts > 0;
     badge.className = `production-preview-badge ${hasIssues ? 'is-warning' : 'is-ready'}`;
@@ -1292,11 +1297,12 @@
       const mappingStats = productRowsAll.reduce((acc, row) => {
         const status = productInventoryMappingStatus(row.name).status;
         if (status === "mapped") acc.mapped += 1;
+        else if (status === "stats") acc.stats += 1;
         else acc.unmapped += 1;
         return acc;
-      }, { mapped: 0, unmapped: 0 });
+      }, { mapped: 0, stats: 0, unmapped: 0 });
       const scope = productViewMode === "changed" ? `本次異動 ${lastProductChanges.size} 項` : `共 ${productRowsAll.length} 項`;
-      const mappingText = `已對應 ${mappingStats.mapped}｜待對應 ${mappingStats.unmapped}`;
+      const mappingText = `可扣 ${mappingStats.mapped}｜僅統計 ${mappingStats.stats}｜需處理 ${mappingStats.unmapped}`;
       productCountHint.textContent = keyword ? `${scope}｜${mappingText}｜搜尋顯示 ${productRows.length} 項` : `${scope}｜${mappingText}`;
     }
     if (selectedProductName && !productRowsAll.some(row => row.name === selectedProductName)) selectedProductName = "";
@@ -1314,7 +1320,8 @@
       { label: "庫存對應", html: true, render: row => mappingStatusHtml(row.name) },
       { label: "操作", html: true, render: row => {
         const state = productInventoryMappingStatus(row.name);
-        return `<button type="button" class="secondary small production-product-map-btn" data-product="${escapeHtml(row.name)}">${state.status === "mapped" ? "檢查對應" : "立即對應"}</button>`;
+        if (state.status === "mapped" || state.status === "stats") return `<span class="production-no-action">—</span>`;
+        return `<button type="button" class="secondary small production-product-map-btn" data-product="${escapeHtml(row.name)}">處理</button>`;
       } }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
     renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
@@ -1875,12 +1882,10 @@ ${record.filename}
   function init() {
     if (!$("production")) return;
     // V3.20.1: ensure the V3.17+ compact UI stylesheet scope is active even when index.html is an older compatible version.
-    $("production").classList.add("production-center", "production-ux-v317");
+    $("production").classList.add("production-center", "production-ux-v321");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
-    document.querySelectorAll("#production *").forEach(el => {
-      if (el.children.length === 0 && /V3\.17 工作流程介面版/.test(el.textContent || "")) {
-        el.textContent = "V3.20 分析整理版：批次指定・數量修正・僅統計；正式扣庫存仍為預覽";
-      }
+    document.querySelectorAll("#production .production-version-badge").forEach(el => {
+      el.textContent = "V3.21 簡化工作台｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
