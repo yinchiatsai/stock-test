@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.27 production analyzer; adds attached print-layer suffix recognition for 彩/白 pairs.
+  // V3.28 production analyzer; separates inventory mapping from filename parsing warnings and auto-clears resolved product parsing issues.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -960,6 +960,23 @@
     return { base: value, variant: "" };
   }
 
+  function effectiveRecordIssues(record) {
+    const list = Array.isArray(record?.issues) ? record.issues : [];
+    if (!list.length) return [];
+
+    // 「分析結果」處理的是庫存對應；「解析警告」只保留仍未解決的檔名解析問題。
+    // 若使用者已經替未解析商品指定完成庫存，原本的「缺少/無法判斷商品」就視為已解決，
+    // 不應在下方再要求處理一次。其他像未知標記、數量格式等警告仍保留。
+    const mappingState = recordInventoryMapping(record, record.product || '');
+    const mappingResolved = isStatsOnlyRecord(record, record.product || '') ||
+      (mappingState.details.length > 0 && mappingState.unmapped.length === 0);
+
+    return list.filter(issue => {
+      if (mappingResolved && /缺少商品名稱|無法判斷商品名稱|無法判斷商品|未解析商品/.test(issue)) return false;
+      return true;
+    });
+  }
+
   function summarize(records) {
     const product = new Map();
     const source = new Map();
@@ -990,7 +1007,8 @@
         add(process, record.process || "未指定", qty);
         if (record.tags.length) record.tags.forEach(t => add(tag, t, qty));
       }
-      if (record.issues.length) issues.push(record);
+      const visibleIssues = effectiveRecordIssues(record);
+      if (visibleIssues.length) issues.push({ ...record, issues: visibleIssues });
     });
 
     const productRows = Array.from(product.values()).map(row => ({
@@ -1152,7 +1170,7 @@
       ["掃描檔案", totalFiles],
       ["計算數量", totalQty],
       ["商品種類", products],
-      ["待確認", issues]
+      ["解析警告", issues]
     ].map(([label, value]) => `<div class="production-summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
   }
 
@@ -1428,7 +1446,7 @@
       const statsOnly = mapping.status === "stats";
       const mappingWarning = !statsOnly && mapping.status !== "mapped";
       if (mappingWarning) unmappedProducts += 1;
-      const statusText = statsOnly ? "僅統計，不扣庫存" : mappingWarning ? "待對應" : warning ? "待確認" : "可扣減";
+      const statusText = statsOnly ? "僅統計，不扣庫存" : mappingWarning ? "待對應" : warning ? "解析警告" : "可扣減";
       const qtyText = statsOnly ? `${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}` : `-${escapeHtml(row.quantity)} ${escapeHtml(row.unit || '件')}`;
       return `<div class="production-deduct-row"><strong>${escapeHtml(row.name)}</strong><span class="production-deduct-qty">${qtyText}</span><span class="production-deduct-status ${(warning || mappingWarning) ? 'is-warning' : ''}">${statusText}</span></div>`;
     }).join('');
@@ -1439,7 +1457,7 @@
     const issueCount = (analysis.summary?.issues || []).length;
     const hasIssues = issueCount > 0 || unmappedProducts > 0;
     badge.className = `production-preview-badge ${hasIssues ? 'is-warning' : 'is-ready'}`;
-    badge.textContent = unmappedProducts > 0 ? `尚有 ${unmappedProducts} 個商品待對應庫存` : issueCount > 0 ? `尚有 ${issueCount} 筆待確認` : '已可進入扣庫存預覽';
+    badge.textContent = unmappedProducts > 0 ? `尚有 ${unmappedProducts} 個商品待對應庫存` : issueCount > 0 ? `尚有 ${issueCount} 筆解析警告` : '已可進入扣庫存預覽';
   }
 
   function renderAnalysis(analysis) {
@@ -1525,7 +1543,7 @@
       { label: "建議處理", render: reviewSuggestion },
       { label: "操作", render: renderIssueActions, html: true },
       { label: "檔名", key: "filename" }
-    ], "目前沒有待確認的項目");
+    ], "目前沒有解析警告");
 
     $("productionExportCsvBtn").disabled = false;
   }
@@ -2071,7 +2089,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.26 多資料夾拖曳｜正式扣庫存尚未啟用";
+      el.textContent = "V3.28 解析警告分流｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
