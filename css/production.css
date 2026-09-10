@@ -1643,3 +1643,71 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
   .production-transaction-summary{white-space:normal}
   .production-transaction-actions button{width:100%}
 }
+
+/* V3.43 - 扣庫存完成卡片精緻化 + 手機 RWD */
+.production-deduct-footer.hidden{display:none!important}
+.production-deduct-preview-empty.hidden{display:none!important}
+.production-transaction-status.is-active{
+  margin-top:16px;
+  padding:24px;
+  border:1px solid #dbe7e4;
+  border-radius:22px;
+  background:linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%);
+  box-shadow:0 10px 28px rgba(44,73,78,.055);
+}
+.production-transaction-head{
+  display:flex!important;
+  justify-content:space-between;
+  align-items:center!important;
+  gap:24px!important;
+  margin:0;
+}
+.production-transaction-heading{display:flex!important;align-items:center!important;gap:12px!important;min-width:0}
+.production-transaction-check{
+  width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:grid;place-items:center;
+  background:#e4f2e9;color:#34764a;font-size:20px;font-weight:900;
+}
+.production-transaction-title{font-size:19px;font-weight:900;letter-spacing:.01em;color:#29484e}
+.production-transaction-time{display:block;margin-top:3px;font-size:12px;font-weight:700;color:#849396}
+.production-transaction-metrics{display:flex!important;gap:10px!important;align-items:stretch!important;flex-wrap:nowrap!important}
+.production-transaction-metric{
+  min-width:108px;padding:10px 14px;border-radius:12px;background:#f3f7f6;
+  display:grid!important;gap:2px!important;align-content:center!important;text-align:right;
+}
+.production-transaction-metric span{font-size:11px;color:#809093;font-weight:700}
+.production-transaction-metric strong{font-size:18px;color:#29484e;font-weight:900;font-variant-numeric:tabular-nums}
+.production-transaction-metric small{font-size:11px;font-weight:800;color:#6f8285}
+.production-transaction-divider{height:1px;background:#e8efed;margin:18px 0 14px}
+.production-transaction-items{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;row-gap:0;
+  border:0;border-radius:0;overflow:visible;background:transparent;
+}
+.production-transaction-item-row{
+  min-height:46px;padding:10px 2px;border-bottom:1px solid #edf2f0;background:transparent;
+}
+.production-transaction-item-name{font-size:14px;font-weight:800;color:#334f54;padding-right:10px}
+.production-transaction-item-qty{
+  min-width:42px;text-align:right;padding:4px 8px;border-radius:8px;background:#fff2ef;
+  color:#a34c43;font-size:13px;font-weight:900;
+}
+.production-transaction-actions{
+  display:flex!important;justify-content:space-between;align-items:center;gap:18px;margin-top:18px;
+}
+.production-transaction-action-note{font-size:11px;line-height:1.5;color:#8a989a}
+.production-transaction-actions button{min-width:148px;padding:9px 14px;border-radius:10px;font-size:13px}
+@media(max-width:760px){
+  .production-transaction-status.is-active{padding:17px 15px;border-radius:18px}
+  .production-transaction-head{display:grid!important;gap:14px!important;align-items:start!important}
+  .production-transaction-heading{gap:10px!important}
+  .production-transaction-check{width:34px;height:34px;flex-basis:34px;font-size:18px}
+  .production-transaction-title{font-size:17px}
+  .production-transaction-metrics{display:grid!important;grid-template-columns:1fr 1fr;width:100%;gap:8px!important}
+  .production-transaction-metric{min-width:0;padding:9px 11px;text-align:left}
+  .production-transaction-divider{margin:14px 0 6px}
+  .production-transaction-items{grid-template-columns:1fr;column-gap:0}
+  .production-transaction-item-row{min-height:44px;padding:9px 1px}
+  .production-transaction-item-name{font-size:13px}
+  .production-transaction-actions{display:grid!important;grid-template-columns:1fr;gap:10px;margin-top:15px}
+  .production-transaction-action-note{order:2;text-align:center}
+  .production-transaction-actions button{order:1;width:100%;min-height:44px;margin:0}
+}
