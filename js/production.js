@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.34 production analyzer; collapsible warning panel with actionable-vs-informational issue separation.
+  // V3.37 production analyzer; root-folder batches, compact date parsing, and session-local analyze action.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -589,9 +589,32 @@
   }
 
 
+  function normalizeFolderDate(value) {
+    const text = String(value || "").trim();
+    let m = text.match(/^(\d{4})[-/.]?(\d{2})[-/.]?(\d{2})$/);
+    if (m) {
+      const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+      if (year >= 2000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+    }
+    m = text.match(/^(\d{3})[-/.]?(\d{2})[-/.]?(\d{2})$/);
+    if (m) {
+      const rocYear = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+      if (rocYear >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const year = rocYear + 1911;
+        return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+    }
+    return "";
+  }
+
   function inferDateFromPath(pathParts) {
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    return (pathParts || []).find(part => datePattern.test(part)) || "";
+    for (const part of (pathParts || [])) {
+      const normalized = normalizeFolderDate(part);
+      if (normalized) return normalized;
+    }
+    return "";
   }
 
   function isDateInRange(date, start, end) {
@@ -603,9 +626,8 @@
 
   function inferProcess(pathParts, dateValue) {
     if (!pathParts.length) return "未指定";
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     const candidates = pathParts.slice(0, -1).filter(Boolean);
-    const idx = candidates.findIndex(p => p === dateValue || datePattern.test(p));
+    const idx = candidates.findIndex(p => normalizeFolderDate(p) === dateValue);
     // V3.26：支援「日期/製程/檔案」以及「製程/日期/檔案」兩種常見結構。
     if (idx >= 0 && idx < candidates.length - 1) return candidates[idx + 1] || "未指定";
     if (idx > 0) return candidates[idx - 1] || "未指定";
@@ -916,7 +938,9 @@
     const folder = parts.length > 1 ? parts[0] : "單一檔案";
     const date = inferDateFromPath(parts) || "無日期";
     const process = inferProcess(parts, date) || "未指定";
-    const key = `${folder}|${date}|${process}`;
+    // V3.37：使用者實際拖入的最外層資料夾就是一個批次。
+    // 子資料夾（日期、製程、OK 等）只作為批次內資訊，不再拆成多批。
+    const key = folder;
     return { key, folder, date, process };
   }
 
@@ -924,15 +948,25 @@
     const groups = new Map();
     (entries || []).forEach(entry => {
       const info = productionBatchInfo(entry);
-      if (!groups.has(info.key)) groups.set(info.key, { ...info, total: 0, analyzed: 0, pending: 0, duplicateAttempts: droppedBatchDuplicateCounts.get(info.key) || 0, lastAddedAt: droppedBatchLastAddedAt.get(info.key) || "" });
+      if (!groups.has(info.key)) groups.set(info.key, { ...info, dates: new Set(), processes: new Set(), total: 0, analyzed: 0, pending: 0, duplicateAttempts: droppedBatchDuplicateCounts.get(info.key) || 0, lastAddedAt: droppedBatchLastAddedAt.get(info.key) || "" });
       const group = groups.get(info.key);
       group.total += 1;
+      if (info.date && info.date !== "無日期") group.dates.add(info.date);
+      if (info.process && info.process !== "未指定" && info.process !== info.folder) group.processes.add(info.process);
       if (analyzedDroppedEntryKeys.has(productionEntryKey(entry))) group.analyzed += 1;
       else group.pending += 1;
     });
-    return Array.from(groups.values()).sort((a, b) => {
+    return Array.from(groups.values()).map(group => {
+      const dates = Array.from(group.dates).sort();
+      const processes = Array.from(group.processes).sort((a,b) => a.localeCompare(b, "zh-Hant"));
+      return {
+        ...group,
+        date: dates.length === 0 ? "無日期" : (dates.length === 1 ? dates[0] : `多日期（${dates.length}）`),
+        process: processes.length === 0 ? "未指定" : (processes.length === 1 ? processes[0] : `含 ${processes.length} 個製程/子資料夾`)
+      };
+    }).sort((a, b) => {
       if ((a.pending > 0) !== (b.pending > 0)) return a.pending > 0 ? -1 : 1;
-      return (b.lastAddedAt || "").localeCompare(a.lastAddedAt || "") || (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant");
+      return (b.lastAddedAt || "").localeCompare(a.lastAddedAt || "") || (a.folder || "").localeCompare(b.folder || "", "zh-Hant");
     });
   }
 
@@ -1350,6 +1384,11 @@
     if (labelEl) {
       if (states.length) labelEl.textContent = `${states.length} 批｜待分析 ${pendingBatches.length} 批・${pendingCount} 檔｜已分析 ${analyzedBatches.length} 批・${analyzedCount} 檔`;
       else labelEl.textContent = currentSession.label || "尚未建立";
+    }
+    const analyzeBtn = $("productionAnalyzeBtn");
+    if (analyzeBtn) {
+      analyzeBtn.disabled = pendingCount <= 0;
+      analyzeBtn.textContent = pendingCount > 0 ? `分析新增資料（${pendingCount} 檔）` : "✓ 全部分析完成";
     }
     if (!listEl) return;
 
@@ -2158,9 +2197,11 @@
     const list = $("productionProductPickerList");
     if (!list) return;
     if (!productionPickerState.details.length) {
-      list.innerHTML = `<div class="production-picker-empty">尚未加入指定品項。若一個檔案包含兩個顏色，請分別加入兩個庫存品項。</div>`;
+      list.innerHTML = "";
+      list.classList.add("hidden");
       return;
     }
+    list.classList.remove("hidden");
     list.innerHTML = productionPickerState.details.map((d, idx) => `
       <div class="production-picker-row">
         <div class="production-picker-item-name">${escapeHtml(d.item)}</div>
@@ -2203,7 +2244,7 @@
     if (existingRuleEl) {
       if (existingRule) {
         existingRuleEl.classList.remove("hidden");
-        existingRuleEl.innerHTML = `<strong>已記住的扣庫存方式</strong><div>${escapeHtml(productionPickerState.learnedLabel || productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details, existingRule.mode || ""))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消記憶</button>`;
+        existingRuleEl.innerHTML = `<strong>已記住：</strong> ${escapeHtml(learnedRuleTargetText(existingRule.details, existingRule.mode || ""))}<button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消記憶</button>`;
       } else {
         existingRuleEl.classList.add("hidden");
         existingRuleEl.innerHTML = "";
@@ -2404,7 +2445,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.34 解析警告收合與分級｜正式扣庫存尚未啟用";
+      el.textContent = "V3.37 批次根資料夾與分析操作優化｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2455,7 +2496,7 @@ ${record.filename}
       const firstPath = files[0].webkitRelativePath || files[0].name || "";
       const rootFolder = firstPath.split("/")[0] || "已選擇資料夾";
       folderText.textContent = `${rootFolder}｜${files.length} 個檔案`;
-      updateProductionStatus(`已讀取「${rootFolder}」：${files.length} 個檔案。下一步請按「分析所選資料夾」。`, "done");
+      updateProductionStatus(`已讀取「${rootFolder}」：${files.length} 個檔案。下一步請到「本次生產資料」按「分析新增資料」。`, "done");
     });
 
     const dropZone = $("productionDropZone");
