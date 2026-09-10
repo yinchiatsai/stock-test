@@ -1240,3 +1240,198 @@ main:has(#production:not(.hidden)) {
 @media(max-width:900px){.production-simple-fields{grid-template-columns:1fr 1fr}.production-simple-summary{grid-template-columns:1fr}.production-simple-folder-row{flex-wrap:wrap}.production-simple-folder-row .production-folder-selection{flex-basis:100%;order:2}.production-main-action{flex:1}.production-ux-v321 .production-summary-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.production-ux-v321 .production-simple-head{display:block}.production-ux-v321 .production-version-badge{display:inline-block;margin-top:8px}.production-simple-steps{font-size:11px;gap:6px}.production-simple-fields{grid-template-columns:1fr}.production-simple-upload{padding:16px}.production-simple-folder-row>*{width:100%}.production-simple-folder-row .production-folder-button,.production-simple-folder-row button{justify-content:center}.production-simple-product-table{overflow-x:auto}.production-simple-product-table table{min-width:650px}.production-simple-result,.production-simple-issues,.production-simple-deduct{padding:15px}.production-simple-deduct-head{display:block}.production-simple-deduct-head .production-preview-badge{display:inline-block;margin-top:8px}.production-deduct-footer{display:block!important}.production-deduct-footer button{width:100%;margin-top:10px}}
 .production-simple-steps span.is-done{color:#547a6d}.production-simple-steps span.is-done b{background:#e4f1ea;color:#42705e}.production-no-action{color:#b1b9ba}
+
+/* =========================================================
+   V3.22｜處理商品彈窗簡化
+   目標：只處理「扣哪些庫存、各扣多少」
+   ========================================================= */
+.production-picker-simple{
+  width:min(680px,calc(100vw - 28px))!important;
+  max-width:680px!important;
+  padding:26px!important;
+}
+.production-picker-simple .production-picker-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  padding-bottom:18px;
+  border-bottom:1px solid #e5ecea;
+}
+.production-picker-simple .production-picker-header h3{
+  margin:0 0 7px;
+  font-size:25px;
+  color:#24474c;
+}
+.production-picker-simple .production-picker-subtitle{
+  margin:0;
+  max-width:470px;
+  color:#718589;
+  font-size:14px;
+  line-height:1.55;
+  word-break:break-all;
+}
+.production-picker-simple .production-picker-detected-qty{
+  flex:0 0 auto;
+  padding:9px 12px;
+  border-radius:12px;
+  background:#f3f7f6;
+  color:#718589;
+  font-size:13px;
+  font-weight:750;
+  white-space:nowrap;
+}
+.production-picker-simple .production-picker-detected-qty strong{
+  display:block;
+  margin-top:2px;
+  color:#24474c;
+  font-size:17px;
+}
+.production-picker-simple .production-picker-existing-rule{
+  margin:14px 0 0;
+  padding:11px 13px;
+  border-radius:12px;
+  background:#eef6f4;
+}
+.production-picker-simple .production-picker-message{
+  min-height:0;
+  margin:10px 0 0;
+}
+.production-picker-simple .production-picker-message:empty{display:none;}
+.production-picker-simple .production-picker-list-title{
+  margin:20px 0 9px;
+  color:#24474c;
+  font-size:15px;
+  font-weight:900;
+}
+.production-picker-simple .production-picker-list{
+  margin:0;
+  display:grid;
+  gap:8px;
+  max-height:210px;
+  overflow:auto;
+}
+.production-picker-simple .production-picker-empty{
+  padding:13px 14px;
+  border:1px dashed #d7e2df;
+  border-radius:12px;
+  background:#fafbf9;
+  color:#849397;
+  font-weight:650;
+  font-size:14px;
+}
+.production-picker-simple .production-picker-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid #dfe8e6;
+  border-radius:12px;
+  background:#fff;
+}
+.production-picker-simple .production-picker-item-name{
+  min-width:0;
+  color:#24474c;
+  font-weight:850;
+  overflow-wrap:anywhere;
+}
+.production-picker-simple .production-picker-row-qty{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#718589;
+  font-size:13px;
+  font-weight:750;
+}
+.production-picker-simple .production-picker-row-qty input{
+  width:86px;
+  min-width:86px;
+  padding:8px 9px;
+  text-align:right;
+}
+.production-picker-simple .production-picker-add-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 120px;
+  gap:12px;
+  align-items:start;
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid #e5ecea;
+}
+.production-picker-simple .production-picker-add-row .field{margin:0;}
+.production-picker-simple .production-picker-add-row label{
+  display:block;
+  margin-bottom:6px;
+  color:#5d7478;
+  font-size:13px;
+  font-weight:800;
+}
+.production-picker-simple .production-picker-results{
+  max-height:170px;
+  margin-top:7px;
+  overflow:auto;
+  display:grid;
+  gap:6px;
+}
+.production-picker-simple .production-picker-result{
+  padding:9px 11px;
+  border-radius:10px;
+}
+.production-picker-simple .production-picker-result small{font-size:11px;}
+.production-picker-simple .production-picker-footer-options{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid #e5ecea;
+}
+.production-picker-simple .production-picker-check{
+  margin:0;
+  font-size:14px;
+}
+.production-picker-simple .production-picker-stats-link{
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#72878a!important;
+  font-size:13px!important;
+  font-weight:750!important;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.production-picker-simple .production-picker-stats-link:hover{color:#355d63!important;}
+.production-picker-simple .production-picker-rule-hint{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:10px;
+  background:#faf7ee;
+  color:#7b8581;
+  font-size:12px;
+  line-height:1.55;
+}
+.production-picker-simple .production-picker-actions{
+  margin-top:20px;
+  padding-top:0;
+}
+.production-picker-simple .production-picker-actions button{
+  min-width:100px;
+}
+@media(max-width:680px){
+  .production-picker-simple{padding:20px!important;}
+  .production-picker-simple .production-picker-header{display:block;}
+  .production-picker-simple .production-picker-detected-qty{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    margin-top:12px;
+  }
+  .production-picker-simple .production-picker-detected-qty strong{display:inline;margin:0;}
+  .production-picker-simple .production-picker-add-row{grid-template-columns:1fr;}
+  .production-picker-simple .production-picker-row{grid-template-columns:1fr auto;}
+  .production-picker-simple .production-picker-row-qty{grid-column:1/2;}
+  .production-picker-simple .production-picker-footer-options{align-items:flex-start;flex-direction:column;}
+}
