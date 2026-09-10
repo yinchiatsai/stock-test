@@ -67,6 +67,8 @@
   let lastProductChanges = new Map();
   let learningSearchTerm = "";
   let selectedProductName = "";
+  // V3.25: 拖曳進來的多資料夾檔案，獨立於原生 file input 保存。
+  let droppedProductionEntries = [];
 
   function createEmptySession() {
     return {
@@ -501,11 +503,13 @@
   function inferProcess(pathParts, dateValue) {
     if (!pathParts.length) return "未指定";
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    const candidates = pathParts.slice(0, -1);
+    const candidates = pathParts.slice(0, -1).filter(Boolean);
     const idx = candidates.findIndex(p => p === dateValue || datePattern.test(p));
-    if (idx > 0) return candidates[idx - 1];
-    if (idx === 0) return "未指定";
-    return candidates[0] || "未指定";
+    // V3.25：支援「日期/製程/檔案」以及「製程/日期/檔案」兩種常見結構。
+    if (idx >= 0 && idx < candidates.length - 1) return candidates[idx + 1] || "未指定";
+    if (idx > 0) return candidates[idx - 1] || "未指定";
+    // 沒有日期資料夾時，最靠近檔案的資料夾視為製程名稱。
+    return candidates[candidates.length - 1] || "未指定";
   }
 
   function parseFullName(name) {
@@ -761,6 +765,84 @@
       const path = file.webkitRelativePath || file.name;
       const parts = splitPath(path);
       return { path, filename: parts[parts.length - 1] || file.name, process: manualProcess || "", sourceSignature: `${path}` };
+    });
+  }
+
+  function dedupeProductionEntries(entries) {
+    const seen = new Set();
+    return (entries || []).filter(entry => {
+      const key = String(entry?.path || entry?.sourceSignature || entry?.filename || "").replace(/^\/+/, "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function readAllDirectoryEntries(reader) {
+    return new Promise((resolve, reject) => {
+      const all = [];
+      const readBatch = () => reader.readEntries(batch => {
+        if (!batch.length) return resolve(all);
+        all.push(...batch);
+        readBatch();
+      }, reject);
+      readBatch();
+    });
+  }
+
+  async function entriesFromDroppedEntry(entry, parentPath = "") {
+    if (!entry) return [];
+    const cleanName = String(entry.name || "").replace(/^\/+/, "");
+    const currentPath = parentPath ? `${parentPath}/${cleanName}` : cleanName;
+    if (entry.isFile) {
+      return await new Promise(resolve => entry.file(file => resolve([{
+        path: currentPath,
+        filename: file.name || cleanName,
+        sourceSignature: currentPath,
+        dropped: true
+      }]), () => resolve([])));
+    }
+    if (entry.isDirectory) {
+      try {
+        const children = await readAllDirectoryEntries(entry.createReader());
+        const nested = await Promise.all(children.map(child => entriesFromDroppedEntry(child, currentPath)));
+        return nested.flat();
+      } catch (error) {
+        console.error("production directory read failed:", error);
+        return [];
+      }
+    }
+    return [];
+  }
+
+  async function collectDroppedProductionEntries(dataTransfer) {
+    const items = Array.from(dataTransfer?.items || []);
+    const roots = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
+    if (roots.length) {
+      const groups = await Promise.all(roots.map(root => entriesFromDroppedEntry(root)));
+      return dedupeProductionEntries(groups.flat());
+    }
+    // fallback：部分瀏覽器只提供 files。
+    return dedupeProductionEntries(Array.from(dataTransfer?.files || []).map(file => ({
+      path: file.webkitRelativePath || file.name,
+      filename: file.name,
+      sourceSignature: file.webkitRelativePath || file.name,
+      dropped: true
+    })));
+  }
+
+  function summarizeDroppedFolders(entries) {
+    const groups = new Map();
+    (entries || []).forEach(entry => {
+      const parts = splitPath(entry.path || entry.filename);
+      const date = inferDateFromPath(parts) || "無日期";
+      const process = inferProcess(parts, date) || "未指定";
+      const key = `${date}|${process}`;
+      groups.set(key, (groups.get(key) || 0) + 1);
+    });
+    return Array.from(groups.entries()).map(([key, count]) => {
+      const [date, process] = key.split("|");
+      return `${date}｜${process} ${count} 檔`;
     });
   }
 
@@ -1473,11 +1555,16 @@
 
   function runAnalysis() {
     updateProductionStatus("正在讀取資料夾與分析檔名…", "running");
-    const mode = $("productionModeInput")?.value || "single";
+    const hasDroppedFolders = droppedProductionEntries.length > 0;
+    const mode = hasDroppedFolders ? "all" : ($("productionModeInput")?.value || "single");
     const dateValue = $("productionDateInput")?.value || todayString();
     const startDate = $("productionStartDateInput")?.value || dateValue;
     const endDate = $("productionEndDateInput")?.value || startDate;
-    const rawEntries = [...entriesFromFileInput(), ...entriesFromTextarea()];
+    const rawEntries = dedupeProductionEntries([
+      ...droppedProductionEntries,
+      ...entriesFromFileInput(),
+      ...entriesFromTextarea()
+    ]);
     lastRawEntries = rawEntries;
     lastAnalysisOptions = { mode, dateValue, startDate, endDate };
     const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
@@ -1940,10 +2027,10 @@ ${record.filename}
   function init() {
     if (!$("production")) return;
     // V3.20.1: ensure the V3.17+ compact UI stylesheet scope is active even when index.html is an older compatible version.
-    $("production").classList.add("production-center", "production-ux-v322");
+    $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.22 簡化扣庫設定｜正式扣庫存尚未啟用";
+      el.textContent = "V3.25 多資料夾拖曳｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -1995,6 +2082,34 @@ ${record.filename}
       const rootFolder = firstPath.split("/")[0] || "已選擇資料夾";
       folderText.textContent = `${rootFolder}｜${files.length} 個檔案`;
       updateProductionStatus(`已讀取「${rootFolder}」：${files.length} 個檔案。下一步請按「分析所選資料夾」。`, "done");
+    });
+
+    const dropZone = $("productionDropZone");
+    const preventDrag = event => { event.preventDefault(); event.stopPropagation(); };
+    ["dragenter", "dragover"].forEach(type => dropZone?.addEventListener(type, event => {
+      preventDrag(event);
+      dropZone.classList.add("is-dragover");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }));
+    ["dragleave", "dragend"].forEach(type => dropZone?.addEventListener(type, event => {
+      preventDrag(event);
+      dropZone.classList.remove("is-dragover");
+    }));
+    dropZone?.addEventListener("drop", async event => {
+      preventDrag(event);
+      dropZone.classList.remove("is-dragover");
+      updateProductionStatus("正在讀取拖曳的資料夾…", "running");
+      const incoming = await collectDroppedProductionEntries(event.dataTransfer);
+      if (!incoming.length) {
+        updateProductionStatus("沒有讀到可分析的檔案；請確認拖入的是資料夾。", "idle");
+        return;
+      }
+      const before = droppedProductionEntries.length;
+      droppedProductionEntries = dedupeProductionEntries([...droppedProductionEntries, ...incoming]);
+      const added = droppedProductionEntries.length - before;
+      const groups = summarizeDroppedFolders(droppedProductionEntries);
+      if (folderText) folderText.innerHTML = `<strong>已加入 ${droppedProductionEntries.length} 個檔案</strong><span>${groups.map(escapeHtml).join("　•　")}</span>`;
+      updateProductionStatus(`已加入 ${added} 個新檔案；重複路徑會自動略過。可繼續拖入其他日期或製程。`, "done");
     });
 
     renderSessionPanel();
