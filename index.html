@@ -102,21 +102,27 @@
           <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
         </div>
 
-        <div class="production-simple-fields">
-          <div class="field production-mode-field">
-            <label>分析模式</label>
-            <select id="productionModeInput"><option value="single">單日分析</option><option value="range">日期區間 / 一週分析</option><option value="all">所選資料夾全部日期</option></select>
-          </div>
-          <div class="field production-date-single"><label>日期</label><input id="productionDateInput" type="date" /></div>
-          <div class="field production-date-range hidden"><label>開始日期</label><input id="productionStartDateInput" type="date" /></div>
-          <div class="field production-date-range hidden"><label>結束日期</label><input id="productionEndDateInput" type="date" /></div>
-          <div class="field production-process-field"><label>製程 <small>（需要時填）</small></label><input id="productionProcessInput" placeholder="例如：金屬、彩印" /></div>
-        </div>
-
-        <div class="production-simple-folder-row">
+        <div id="productionDropZone" class="production-drop-zone" tabindex="0">
           <input id="productionFileInput" class="production-folder-native-input" type="file" multiple webkitdirectory directory />
-          <label for="productionFileInput" id="productionChooseFolderBtn" class="production-folder-button">選擇資料夾</label>
-          <span id="productionSelectedFolderText" class="production-folder-selection">尚未選擇資料夾</span>
+          <div class="production-drop-icon">＋</div>
+          <strong>將生產資料夾拖曳到這裡</strong>
+          <span>可一次拖入多天、多種製程資料夾；系統會依資料夾路徑自動判斷。</span>
+          <button id="productionChooseFolderBtn" type="button" class="production-folder-button">或點此選擇資料夾</button>
+        </div>
+        <div id="productionSelectedFolderText" class="production-drop-summary">尚未加入資料夾</div>
+
+        <details class="production-advanced-input">
+          <summary>進階：手動指定日期／製程</summary>
+          <div class="production-simple-fields">
+            <div class="field production-mode-field"><label>分析模式</label><select id="productionModeInput"><option value="single">單日分析</option><option value="range">日期區間 / 一週分析</option><option value="all">所選資料夾全部日期</option></select></div>
+            <div class="field production-date-single"><label>日期</label><input id="productionDateInput" type="date" /></div>
+            <div class="field production-date-range hidden"><label>開始日期</label><input id="productionStartDateInput" type="date" /></div>
+            <div class="field production-date-range hidden"><label>結束日期</label><input id="productionEndDateInput" type="date" /></div>
+            <div class="field production-process-field"><label>製程 <small>（選擇器模式需要時填）</small></label><input id="productionProcessInput" placeholder="例如：金屬、彩印" /></div>
+          </div>
+        </details>
+
+        <div class="production-simple-folder-row production-drop-actions">
           <button id="productionAnalyzeBtn" type="button" class="production-main-action">開始分析</button>
           <button id="productionClearBtn" class="secondary production-quiet-action" type="button">清除</button>
           <button id="productionExportCsvBtn" class="secondary production-quiet-action" type="button" disabled>匯出 CSV</button>
