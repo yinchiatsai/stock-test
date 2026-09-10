@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.21 simplified production-deduction workbench; keeps V3.20 parsing, merge, mapping and learning logic.
+  // V3.27 production analyzer; adds attached print-layer suffix recognition for 彩/白 pairs.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -397,6 +397,28 @@
     return { attribute: "", family: "" };
   }
 
+  function detectAttachedPrintLayer(baseName) {
+    const text = normalizedBaseName(baseName);
+    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
+    // 商品顏色使用括號表示，例如 (白)。沒有括號且直接黏在片段尾端的 白/彩/白檔/彩檔/鏡彩/正彩
+    // 視為製作屬性，例如：識別證...3CX白_2PJ、識別證...3CX彩_2PJ。
+    for (const segment of segments) {
+      if (!segment || /[）)]$/.test(segment)) continue;
+      const m = segment.match(/(白檔|彩檔|鏡彩|正彩|白|彩)$/);
+      if (!m) continue;
+      const prefix = segment.slice(0, -m[1].length);
+      if (!prefix) continue; // 獨立 _白_ / _彩_ 交給原本規則
+      return normalizeProductionAttribute(m[1]);
+    }
+    return { attribute: "", family: "" };
+  }
+
+  function stripAttachedPrintLayer(value) {
+    return String(value || "")
+      .replace(/(白檔|彩檔|鏡彩|正彩|白|彩)$/g, "")
+      .trim();
+  }
+
   function detectProductionAttribute(baseName) {
     const text = normalizedBaseName(baseName);
     const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
@@ -406,6 +428,8 @@
     }
     const m = text.match(/[_-](正面?|背面?|反面?|白檔?|彩檔?|底白|底色|鏡彩|正彩|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?|有刻|沒刻|无刻|不刻)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
+    const attached = detectAttachedPrintLayer(text);
+    if (attached.attribute) return attached;
     return { attribute: "", family: "" };
   }
 
@@ -476,9 +500,11 @@
     const text = normalizedBaseName(baseName);
     return text
       .split(/([_-]+)/)
-      .filter(part => {
-        if (/^[_-]+$/.test(part)) return true;
-        return !normalizeProductionAttribute(part).attribute;
+      .map(part => {
+        if (/^[_-]+$/.test(part)) return part;
+        if (normalizeProductionAttribute(part).attribute) return "";
+        const attached = detectAttachedPrintLayer(part);
+        return attached.attribute ? stripAttachedPrintLayer(part) : part;
       })
       .join("")
       .replace(/[_-]{2,}/g, "_")
@@ -709,6 +735,10 @@
       }
     }
     const detectedAttribute = detectProductionAttribute(base);
+    // 若白/彩是直接黏在商品片段尾端，從商品主名中移除，讓白檔和彩檔能落在同一品項。
+    if (detectedAttribute.family === "printLayer" && detectAttachedPrintLayer(base).attribute) {
+      parsed.product = stripAttachedPrintLayer(parsed.product);
+    }
     const side = detectedAttribute.family === "side" ? detectedAttribute.attribute : "";
     const identity = removeProductionAttributesForIdentity(base);
     const issues = [...parsed.issues];
