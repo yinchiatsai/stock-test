@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.32 production analyzer; adds shared front/back file merge and inline multi-color 各x quantity parsing.
+  // V3.33 production analyzer; adds clear pending/analyzed folder progress and analyzes only newly added dragged files.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -70,6 +70,8 @@
   let selectedProductName = "";
   // V3.26: 拖曳進來的多資料夾檔案，獨立於原生 file input 保存。
   let droppedProductionEntries = [];
+  // 已完成分析的拖曳來源檔；同一工作階段再次按分析時只處理新增檔案。
+  let analyzedDroppedEntryKeys = new Set();
 
   function createEmptySession() {
     return {
@@ -903,6 +905,40 @@
     });
   }
 
+  function productionEntryKey(entry) {
+    return String(entry?.path || entry?.sourceSignature || entry?.filename || "").replace(/^\/+/, "");
+  }
+
+  function droppedFolderStates(entries = droppedProductionEntries) {
+    const groups = new Map();
+    (entries || []).forEach(entry => {
+      const parts = splitPath(entry.path || entry.filename);
+      const date = inferDateFromPath(parts) || "無日期";
+      const process = inferProcess(parts, date) || "未指定";
+      const key = `${date}|${process}`;
+      if (!groups.has(key)) groups.set(key, { key, date, process, total: 0, analyzed: 0, pending: 0 });
+      const group = groups.get(key);
+      group.total += 1;
+      if (analyzedDroppedEntryKeys.has(productionEntryKey(entry))) group.analyzed += 1;
+      else group.pending += 1;
+    });
+    return Array.from(groups.values()).sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.process || "").localeCompare(b.process || "", "zh-Hant"));
+  }
+
+  function renderDroppedFolderSummary() {
+    const folderText = $("productionSelectedFolderText");
+    if (!folderText) return;
+    const states = droppedFolderStates();
+    if (!states.length) {
+      folderText.textContent = "尚未加入資料夾";
+      return;
+    }
+    const total = states.reduce((sum, g) => sum + g.total, 0);
+    const analyzed = states.reduce((sum, g) => sum + g.analyzed, 0);
+    const pending = states.reduce((sum, g) => sum + g.pending, 0);
+    folderText.innerHTML = `<strong>已加入 ${states.length} 批資料｜共 ${total} 檔</strong><span>已分析 ${analyzed} 檔｜待分析 ${pending} 檔</span>`;
+  }
+
   function readAllDirectoryEntries(reader) {
     return new Promise((resolve, reject) => {
       const all = [];
@@ -1295,20 +1331,41 @@
   function renderSessionPanel() {
     const labelEl = $("productionSessionLabel");
     const listEl = $("productionSessionList");
-    if (labelEl) labelEl.textContent = currentSession.label || "尚未建立";
+    const states = droppedFolderStates();
+    const analyzedCount = states.reduce((sum, g) => sum + g.analyzed, 0);
+    const pendingCount = states.reduce((sum, g) => sum + g.pending, 0);
+    if (labelEl) {
+      if (states.length) labelEl.textContent = pendingCount ? `${states.length} 批｜已分析 ${analyzedCount} 檔｜待分析 ${pendingCount} 檔` : `${states.length} 批｜全部分析完成`;
+      else labelEl.textContent = currentSession.label || "尚未建立";
+    }
     if (!listEl) return;
+
+    if (states.length) {
+      listEl.innerHTML = states.map(source => {
+        const isDone = source.pending === 0;
+        const isPartial = source.analyzed > 0 && source.pending > 0;
+        const statusText = isDone ? "✓ 已分析" : (isPartial ? "● 有新增待分析" : "● 待分析");
+        const countText = isDone ? `${source.total} 檔` : (isPartial ? `${source.analyzed} 已分析＋${source.pending} 待分析` : `${source.pending} 檔待分析`);
+        return `
+          <div class="production-session-item ${isDone ? "is-analyzed" : "is-pending"}" data-key="${escapeHtml(source.key)}">
+            <span class="production-session-main"><b class="production-session-status">${statusText}</b><span>${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span></span>
+            <span class="production-session-actions"><strong>${escapeHtml(countText)}</strong>${isDone ? `<button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改名稱</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button>` : ""}</span>
+          </div>`;
+      }).join("");
+      return;
+    }
+
     if (!currentSession.sources.length) {
-      listEl.innerHTML = "分析製程後會顯示進度。";
+      listEl.innerHTML = "加入資料夾後會顯示「待分析／已分析」進度。";
       return;
     }
     listEl.innerHTML = currentSession.sources.map(source => `
-      <div class="production-session-item" data-key="${escapeHtml(source.key)}">
-        <span>✓ ${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span>
+      <div class="production-session-item is-analyzed" data-key="${escapeHtml(source.key)}">
+        <span class="production-session-main"><b class="production-session-status">✓ 已分析</b><span>${escapeHtml(source.date)}｜<strong>${escapeHtml(source.process)}</strong></span></span>
         <span class="production-session-actions"><strong>${escapeHtml(source.count)} 檔</strong><button type="button" class="secondary small production-session-edit-btn" data-key="${escapeHtml(source.key)}">修改名稱</button><button type="button" class="secondary small production-session-remove-btn" data-key="${escapeHtml(source.key)}">移除</button></span>
       </div>
     `).join("");
   }
-
 
   function updateProductionStatus(message, type = "idle") {
     const el = $("productionStatusBox");
@@ -1789,28 +1846,40 @@
   }
 
   function runAnalysis() {
-    updateProductionStatus("正在讀取資料夾與分析檔名…", "running");
+    updateProductionStatus("正在分析新增資料…", "running");
     const hasDroppedFolders = droppedProductionEntries.length > 0;
     const mode = hasDroppedFolders ? "all" : ($("productionModeInput")?.value || "single");
     const dateValue = $("productionDateInput")?.value || todayString();
     const startDate = $("productionStartDateInput")?.value || dateValue;
     const endDate = $("productionEndDateInput")?.value || startDate;
-    const rawEntries = dedupeProductionEntries([
-      ...droppedProductionEntries,
+
+    const droppedPending = hasDroppedFolders
+      ? droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry)))
+      : [];
+    const otherEntries = dedupeProductionEntries([
       ...entriesFromFileInput(),
       ...entriesFromTextarea()
     ]);
+    const rawEntries = dedupeProductionEntries(hasDroppedFolders ? [...droppedPending, ...otherEntries] : otherEntries);
+
+    if (hasDroppedFolders && !droppedPending.length && !otherEntries.length) {
+      renderDroppedFolderSummary();
+      renderSessionPanel();
+      updateProductionStatus("目前沒有新增資料需要分析；已加入的拖曳資料都分析完成。", "done");
+      return;
+    }
+
     lastRawEntries = rawEntries;
     lastAnalysisOptions = { mode, dateValue, startDate, endDate };
     const entries = filterEntriesByMode(rawEntries, mode, dateValue, startDate, endDate);
     if (!rawEntries.length) {
-      updateProductionStatus("尚未選擇資料夾。請先選擇要分析的日期資料夾或製程資料夾。", "idle");
+      updateProductionStatus("尚未選擇資料夾。請先加入要分析的資料夾。", "idle");
       alert("請先選擇要分析的資料夾。");
       return;
     }
     if (!entries.length) {
       updateProductionStatus("沒有符合日期條件的檔名。請確認分析模式與日期範圍。", "idle");
-      alert("所選資料夾中沒有符合日期條件的檔名。若你選的是日期資料夾，請確認分析日期相同；若要分析一週，請選製程資料夾那一層。");
+      alert("所選資料夾中沒有符合日期條件的檔名。");
       return;
     }
     const analysisLabel = mode === "range" ? `${startDate}~${endDate}` : (mode === "all" ? "全部日期" : dateValue);
@@ -1823,10 +1892,22 @@
     lastAnalysis.mode = "session";
     lastAnalysis.filteredCount = currentSession.records.length;
     lastAnalysis.rawCount = currentSession.records.length;
+
+    // 只有實際進入本次分析的拖曳檔案才標示為已分析。
+    const analyzedNow = new Set(entries.map(productionEntryKey));
+    droppedPending.forEach(entry => {
+      const key = productionEntryKey(entry);
+      if (analyzedNow.has(key)) analyzedDroppedEntryKeys.add(key);
+    });
+
     captureAnalysisChange(previousProductRows, lastAnalysis);
+    renderDroppedFolderSummary();
     renderSessionPanel();
     renderAnalysis(lastAnalysis);
-    updateProductionStatus(`分析完成：本次讀取 ${entries.length} 個檔名，目前分析共 ${currentSession.records.length} 筆明細。`, "done");
+    const remaining = droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry))).length;
+    updateProductionStatus(remaining
+      ? `本次新增分析 ${entries.length} 個檔名；還有 ${remaining} 個檔案待分析。`
+      : `分析完成：本次新增分析 ${entries.length} 個檔名；目前已加入資料全部分析完成。`, "done");
     $("productionSummaryCards")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -2267,7 +2348,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.32 共用正反面＋多色各x解析｜正式扣庫存尚未啟用";
+      el.textContent = "V3.33 新增資料分析進度｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2344,15 +2425,16 @@ ${record.filename}
       const before = droppedProductionEntries.length;
       droppedProductionEntries = dedupeProductionEntries([...droppedProductionEntries, ...incoming]);
       const added = droppedProductionEntries.length - before;
-      const groups = summarizeDroppedFolders(droppedProductionEntries);
-      if (folderText) folderText.innerHTML = `<strong>已加入 ${droppedProductionEntries.length} 個檔案</strong><span>${groups.map(escapeHtml).join("　•　")}</span>`;
-      updateProductionStatus(`已加入 ${added} 個新檔案；重複路徑會自動略過。可繼續拖入其他日期或製程。`, "done");
+      renderDroppedFolderSummary();
+      renderSessionPanel();
+      const pending = droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry))).length;
+      updateProductionStatus(`已加入 ${added} 個新檔案；目前有 ${pending} 個檔案待分析。`, "done");
     });
 
     renderSessionPanel();
     setProductionFlowState(lastAnalysis);
     renderDeductPreview(lastAnalysis);
-    updateProductionStatus("尚未開始分析。請先選擇資料夾，再按「分析所選資料夾」。", "idle");
+    updateProductionStatus("尚未開始分析。請先加入資料夾，再按「分析新增資料」。", "idle");
     renderLearningRules();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
@@ -2486,8 +2568,11 @@ ${record.filename}
       if (textarea) textarea.value = "";
       const fileInput = $("productionFileInput");
       if (fileInput) fileInput.value = "";
+      droppedProductionEntries = [];
+      analyzedDroppedEntryKeys = new Set();
       const folderText = $("productionSelectedFolderText");
-      if (folderText) folderText.textContent = "尚未選擇資料夾";
+      if (folderText) folderText.textContent = "尚未加入資料夾";
+      renderSessionPanel();
       const processInput = $("productionProcessInput");
       if (processInput) processInput.value = "";
       updateProductionStatus("已清除已選資料夾/輸入欄位；目前分析結果仍保留。", "idle");
