@@ -98,7 +98,7 @@
 
       <section class="card production-simple-upload">
         <div class="production-simple-upload-head">
-          <div><h3>1. 選擇生產資料</h3><p class="note">正常情況只要選資料夾後按「開始分析」。</p></div>
+          <div><h3>1. 選擇生產資料</h3><p class="note">可連續加入多個資料夾；系統會清楚標示「待分析／已分析」，只分析新增資料。</p></div>
           <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
         </div>
 
@@ -123,7 +123,7 @@
         </details>
 
         <div class="production-simple-folder-row production-drop-actions">
-          <button id="productionAnalyzeBtn" type="button" class="production-main-action">開始分析</button>
+          <button id="productionAnalyzeBtn" type="button" class="production-main-action">分析新增資料</button>
           <button id="productionClearBtn" class="secondary production-quiet-action" type="button">清除</button>
           <button id="productionExportCsvBtn" class="secondary production-quiet-action" type="button" disabled>匯出 CSV</button>
         </div>
@@ -133,7 +133,7 @@
       <section class="production-simple-summary">
         <div id="productionSummaryCards" class="production-summary-grid"><div class="production-summary-empty">尚未分析</div></div>
         <div class="production-session-box production-simple-session">
-          <div class="production-session-head"><strong>本次已分析</strong><span id="productionSessionLabel">尚未建立</span></div>
+          <div class="production-session-head"><strong>本次生產資料</strong><span id="productionSessionLabel">尚未建立</span></div>
           <div id="productionSessionList" class="production-session-list">分析資料夾後會顯示。</div>
         </div>
       </section>
