@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.45 production analyzer; every confirm click creates one independent reversible transaction from all currently pending analyzed folders.
+  // V3.46 production analyzer; mapping status is derived from the same stockDetails used by the deduction plan, so remembered mappings and preview stay in sync.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1596,8 +1596,15 @@
 
   function recordInventoryMapping(record, productName) {
     const inv = inventoryNameMap();
-    const rawDetails = (record?.stockDetails || []).filter(d => Number(d.quantity || 0) > 0 && (!productName || d.item === productName || splitStockItemName(d.item).base === productName));
-    const details = rawDetails.length ? rawDetails : (record?.product === productName && Number(record?.countedQuantity || 0) > 0 ? [{ item: record.product, quantity: record.countedQuantity, unit: record.unit || "件", note: "解析商品" }] : []);
+    // V3.46：庫存對應狀態必須讀取「實際會拿去扣庫存的 stockDetails」。
+    // 舊版會用商品名稱再次篩選 detail，像「黃銅門牌 → 黃銅片＋木底座」這種跨品項對應
+    // 會被誤判成尚未對應，但 buildDeductionPlan 又能正常扣，造成上下畫面互相矛盾。
+    const rawDetails = (record?.stockDetails || []).filter(d => Number(d.quantity || 0) > 0 && String(d.item || "").trim());
+    const details = rawDetails.length
+      ? rawDetails
+      : (record?.product === productName && Number(record?.countedQuantity || 0) > 0
+        ? [{ item: record.product, quantity: record.countedQuantity, unit: record.unit || "件", note: "解析商品" }]
+        : []);
     const mapped = [];
     const unmapped = [];
     details.forEach(detail => {
@@ -1610,21 +1617,32 @@
   }
 
   function productInventoryMappingStatus(productName) {
-    const statsRows = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, productName));
-    if (statsRows.length && statsRows.every(r => isStatsOnlyRecord(r, productName))) return { status: "stats", mappedNames: [], unmappedNames: [], mappedCount: 0, unmappedCount: 0 };
     const rows = (lastAnalysis?.records || []).filter(r => Number(r.countedQuantity || 0) > 0 && recordContributesToProduct(r, productName));
+    if (rows.length && rows.every(r => isStatsOnlyRecord(r, productName))) {
+      return { status: "stats", mappedNames: [], mappedTargets: [], unmappedNames: [], mappedCount: 0, unmappedCount: 0 };
+    }
+
     const allMapped = [];
     const allUnmapped = [];
-    rows.forEach(record => {
+    rows.filter(r => !isStatsOnlyRecord(r, productName)).forEach(record => {
       const state = recordInventoryMapping(record, productName);
       allMapped.push(...state.mapped);
       allUnmapped.push(...state.unmapped);
     });
+
     const unique = values => Array.from(new Set(values.filter(Boolean)));
     const mappedNames = unique(allMapped.map(d => d.officialName || d.item));
     const unmappedNames = unique(allUnmapped.map(d => d.item));
+    const targetTotals = new Map();
+    allMapped.forEach(detail => {
+      const name = detail.officialName || detail.item;
+      const qty = Math.max(0, Math.round(Number(detail.quantity || 0)));
+      if (!name || !qty) return;
+      targetTotals.set(name, (targetTotals.get(name) || 0) + qty);
+    });
+    const mappedTargets = Array.from(targetTotals, ([name, quantity]) => ({ name, quantity }));
     const status = allUnmapped.length === 0 && allMapped.length > 0 ? "mapped" : allMapped.length > 0 ? "partial" : "unmapped";
-    return { status, mappedNames, unmappedNames, mappedCount: allMapped.length, unmappedCount: allUnmapped.length };
+    return { status, mappedNames, mappedTargets, unmappedNames, mappedCount: allMapped.length, unmappedCount: allUnmapped.length };
   }
 
   function mappingStatusHtml(productName) {
@@ -1633,10 +1651,12 @@
       return `<span class="production-map-badge is-mapped">◎ 僅統計</span><div class="production-map-target">不參與庫存扣減</div>`;
     }
     if (state.status === "mapped") {
-      return `<span class="production-map-badge is-mapped">✓ 已對應</span>${state.mappedNames.length ? `<div class="production-map-target">${escapeHtml(state.mappedNames.join("、"))}</div>` : ""}`;
+      const targets = (state.mappedTargets || []).map(row => `${row.name} −${row.quantity}`).join("、");
+      return `<span class="production-map-badge is-mapped">✓ 已對應</span>${targets ? `<div class="production-map-target production-map-deduct-target"><span>準備扣：</span>${escapeHtml(targets)}</div>` : ""}`;
     }
     if (state.status === "partial") {
-      return `<span class="production-map-badge is-partial">⚠ 部分對應</span><div class="production-map-target">待處理：${escapeHtml(state.unmappedNames.join("、") || "尚有未對應品項")}</div>`;
+      const targets = (state.mappedTargets || []).map(row => `${row.name} −${row.quantity}`).join("、");
+      return `<span class="production-map-badge is-partial">⚠ 部分對應</span>${targets ? `<div class="production-map-target production-map-deduct-target"><span>已納入：</span>${escapeHtml(targets)}</div>` : ""}<div class="production-map-target">待處理：${escapeHtml(state.unmappedNames.join("、") || "尚有未對應品項")}</div>`;
     }
     return `<span class="production-map-badge is-unmapped">⚠ 尚未對應</span>${state.unmappedNames.length ? `<div class="production-map-target">解析：${escapeHtml(state.unmappedNames.join("、"))}</div>` : ""}`;
   }
@@ -2798,7 +2818,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.45 直覺式獨立扣庫存交易";
+      el.textContent = "V3.46 對應狀態與扣存預覽同步";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
