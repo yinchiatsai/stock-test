@@ -1435,3 +1435,35 @@ main:has(#production:not(.hidden)) {
   .production-picker-simple .production-picker-row-qty{grid-column:1/2;}
   .production-picker-simple .production-picker-footer-options{align-items:flex-start;flex-direction:column;}
 }
+
+
+/* ===== V3.23 商品來源明細：點品項列展開 ===== */
+.production-product-select-btn{display:inline-flex!important;align-items:center!important;gap:5px!important;cursor:pointer!important}
+.production-product-toggle-icon{font-size:12px;color:#829092;line-height:1;min-width:10px}
+.production-simple-product-table tr.is-detail-open>td{background:#fbfcfb!important;border-bottom-color:transparent!important}
+.production-product-inline-detail-row>td{padding:0 12px 12px!important;background:#fbfcfb!important;border-bottom:1px solid #e5ebea!important}
+.production-product-inline-detail-box{border:1px solid #dfe8e6;border-radius:10px;background:#fff;padding:14px 16px;margin:0}
+.production-inline-source-head{margin-bottom:10px!important;padding-bottom:10px!important;border-bottom:1px solid #eef2f1!important}
+.production-inline-source-head h4{margin:2px 0 0!important;font-size:15px!important}
+.production-inline-source-summary{font-size:11px;color:#829092;margin-top:3px}
+.production-inline-source-list{display:grid;gap:7px!important}
+.production-inline-source-item{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:14px!important;padding:10px 12px!important;border:1px solid #edf1f0!important;border-radius:8px!important;background:#fff!important}
+.production-inline-source-item.is-merged{background:#fafbfb!important}
+.production-inline-source-main{min-width:0;flex:1}
+.production-inline-source-status{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
+.production-file-count-badge,.production-inline-file-map{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;line-height:1.3}
+.production-file-count-badge.is-counted{background:#eaf5ef;color:#3e725a}
+.production-file-count-badge.is-merged{background:#f1f3f3;color:#7c898b}
+.production-inline-file-map.is-ok{background:#edf6f1;color:#3e725a}
+.production-inline-file-map.is-warning{background:#fff4e5;color:#91651f}
+.production-inline-file-map.is-stats{background:#f1f3f3;color:#677476}
+.production-inline-source-item .production-side-file{font-size:12px!important;font-weight:700!important;color:#334f52!important;overflow-wrap:anywhere}
+.production-inline-source-item .production-side-meta{font-size:10.5px!important;color:#899597!important;margin-top:3px!important;overflow-wrap:anywhere}
+.production-inline-source-actions{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+.production-inline-source-actions button{white-space:nowrap!important}
+@media (max-width:760px){
+  .production-product-inline-detail-row>td{padding:0 8px 10px!important}
+  .production-product-inline-detail-box{padding:11px!important}
+  .production-inline-source-item{align-items:flex-start!important;flex-direction:column!important;gap:8px!important}
+  .production-inline-source-actions{width:100%;justify-content:flex-end}
+}
