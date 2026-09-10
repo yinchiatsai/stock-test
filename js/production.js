@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.31 production analyzer; adds paired 正面/旋轉面 production-file merge while preserving existing side rules.
+  // V3.32 production analyzer; adds shared front/back file merge and inline multi-color 各x quantity parsing.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -225,6 +225,30 @@
       }
     }
     const issues = [];
+
+    // 支援括號內直接寫「銀_玫瑰各x1」：各xN 套用到前面所有顏色。
+    // 例如：軍牌(單)(銀_玫瑰各x1)_客人 → 銀x1 + 玫瑰x1。
+    const fullGroups = parseParenGroups(normalizedRaw);
+    for (const group of fullGroups) {
+      const m = String(group.text || "").match(/^(.*?)各\s*[xX×]\s*(\d+)$/);
+      if (!m) continue;
+      const specs = parseColorList(m[1]).filter(Boolean);
+      const colors = specs.filter(spec => KNOWN_COLORS.includes(spec));
+      if (!colors.length || colors.length !== specs.length) continue;
+      const perColor = Number(m[2]);
+      const base = normalizedRaw.slice(0, group.start).trim();
+      return {
+        product: cleanProduct(base),
+        quantity: colors.length * perColor,
+        unitHint: "件",
+        colors,
+        perColorQty: perColor,
+        variantDetails: colors.map(color => ({ name: color, quantity: perColor })),
+        qtyMode: "inline-same-color-qty",
+        issues
+      };
+    }
+
     if (!text) {
       return { product: "", quantity: 0, unitHint: "件", colors: [], qtyMode: "error", issues: ["缺少商品名稱"] };
     }
@@ -421,7 +445,40 @@
       .trim();
   }
 
+  function detectSharedSideSegment(baseName) {
+    const text = normalizedBaseName(baseName);
+    const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
+    for (const segment of segments) {
+      let m = segment.match(/^(正面?|背面?|反面?)同圖[xX×]\s*(\d+)$/);
+      if (m) {
+        const normalized = normalizeProductionAttribute(m[1]);
+        return {
+          type: "shared",
+          side: normalized.attribute,
+          role: normalized.attribute === "正" ? "front" : "back",
+          quantity: Number(m[2]),
+          segment
+        };
+      }
+      m = segment.match(/^(正面?|背面?|反面?)(\d+)$/);
+      if (m) {
+        const normalized = normalizeProductionAttribute(m[1]);
+        return {
+          type: "individual",
+          side: normalized.attribute,
+          role: normalized.attribute === "正" ? "front" : "back",
+          index: Number(m[2]),
+          quantity: 1,
+          segment
+        };
+      }
+    }
+    return null;
+  }
+
   function detectProductionAttribute(baseName) {
+    const sharedSide = detectSharedSideSegment(baseName);
+    if (sharedSide) return normalizeProductionAttribute(sharedSide.side);
     const text = normalizedBaseName(baseName);
     const segments = text.split(/[_-]+/).map(x => x.trim()).filter(Boolean);
     for (const segment of segments) {
@@ -504,6 +561,7 @@
       .split(/([_-]+)/)
       .map(part => {
         if (/^[_-]+$/.test(part)) return part;
+        if (detectSharedSideSegment(part)) return "";
         if (normalizeProductionAttribute(part).attribute) return "";
         const attached = detectAttachedPrintLayer(part);
         return attached.attribute ? stripAttachedPrintLayer(part) : part;
@@ -788,6 +846,7 @@
       side,
       productionAttribute: detectedAttribute.attribute,
       productionAttributeFamily: detectedAttribute.family,
+      sharedSideInfo: detectSharedSideSegment(base),
       identity,
       filename,
       path: entry.path || filename,
@@ -933,6 +992,58 @@
     });
   }
 
+  function applySharedSideCommonMerge(records) {
+    // 共用正/反面製作檔：例如 正01、正02 + 反同圖X2 => 成品 2 件。
+    // 只有數量吻合時才自動合併；不一致則保留並產生解析警告。
+    const groups = new Map();
+    records.forEach(record => {
+      const info = record.sharedSideInfo;
+      if (!info || record.folderPriority) return;
+      const mergeIdentity = String(record.identity || record.filename || "")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[\s_-]+/g, "")
+        .toLowerCase();
+      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${mergeIdentity}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(record);
+    });
+
+    groups.forEach(group => {
+      const shared = group.filter(r => r.sharedSideInfo?.type === "shared");
+      if (shared.length !== 1) return;
+      const sharedRecord = shared[0];
+      const sharedInfo = sharedRecord.sharedSideInfo;
+      const oppositeRole = sharedInfo.role === "front" ? "back" : "front";
+      const individuals = group.filter(r => r.sharedSideInfo?.type === "individual" && r.sharedSideInfo.role === oppositeRole);
+      if (!individuals.length) return;
+
+      const individualTotal = individuals.reduce((sum, r) => sum + Math.max(1, Number(r.quantity || 1)), 0);
+      const sharedQty = Math.max(1, Number(sharedInfo.quantity || 1));
+      if (individualTotal !== sharedQty) {
+        const frontQty = sharedInfo.role === "front" ? sharedQty : individualTotal;
+        const backQty = sharedInfo.role === "back" ? sharedQty : individualTotal;
+        const warning = `正反面數量不一致：正面 ${frontQty}、反面 ${backQty}`;
+        group.forEach(r => {
+          r.issues = Array.from(new Set([...(r.issues || []), warning]));
+          r.sharedSideGroupHandled = true;
+        });
+        return;
+      }
+
+      // 共用面本身不額外計數；每個獨立面維持自己的數量。
+      sharedRecord.countedQuantity = 0;
+      sharedRecord.stockDetails = [];
+      sharedRecord.mergedByProductionAttribute = true;
+      sharedRecord.sharedSideGroupHandled = true;
+      sharedRecord.mergeReason = `${sharedInfo.side}同圖×${sharedQty}共用製作檔合併`;
+      individuals.forEach(r => {
+        r.sharedSideGroupHandled = true;
+        r.mergeReason = sharedRecord.mergeReason;
+      });
+      group.filter(r => !r.sharedSideGroupHandled).forEach(r => { r.sharedSideGroupHandled = true; });
+    });
+  }
+
   function applyPairedPresentationFaceMerge(records) {
     // 特例：兩用名片架等製作檔會以「正面 + 旋轉面」成對出現。
     // 「正面」仍保留既有 side 屬性，避免破壞其他商品的正/背合併；
@@ -973,7 +1084,7 @@
   function applyProductionAttributeMerge(records) {
     const groups = new Map();
     records.forEach(record => {
-      if (!record.productionAttribute || !record.productionAttributeFamily || record.folderPriority) return;
+      if (!record.productionAttribute || !record.productionAttributeFamily || record.folderPriority || record.sharedSideGroupHandled) return;
       const mergeIdentity = String(record.identity || record.filename || "")
         .replace(/\.[^.]+$/, "")
         .replace(/[\s_-]+/g, "")
@@ -1009,6 +1120,7 @@
   }
 
   function applySideMerge(records) {
+    applySharedSideCommonMerge(records);
     applyPairedPresentationFaceMerge(records);
     applyProductionAttributeMerge(records);
   }
@@ -2155,7 +2267,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.30 對應數量整數覆蓋｜正式扣庫存尚未啟用";
+      el.textContent = "V3.32 共用正反面＋多色各x解析｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
