@@ -1494,3 +1494,14 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
   .production-drop-summary{display:block}.production-drop-summary span{display:block;margin-top:5px}
   .production-drop-actions>*{width:auto!important}.production-drop-actions .production-main-action{flex:1}
 }
+
+
+/* V3.33 批次分析進度 */
+.production-simple-session .production-session-item{border-radius:10px!important;padding:10px 12px!important;margin:5px 0!important;border:1px solid #edf1f1!important}
+.production-simple-session .production-session-item.is-pending{background:#fffaf0!important;border-color:#f1dfb9!important}
+.production-simple-session .production-session-item.is-analyzed{background:#f7fbf9!important;border-color:#dcebe5!important}
+.production-session-main{display:flex;align-items:center;gap:10px;min-width:0}
+.production-session-status{display:inline-flex;align-items:center;white-space:nowrap;padding:4px 8px;border-radius:999px;font-size:12px;color:#477865;background:#eaf5f0}
+.production-session-item.is-pending .production-session-status{color:#9a6a1f;background:#fff0cf}
+.production-session-head span{font-weight:700;color:#6e7f81}
+@media(max-width:720px){.production-session-main{align-items:flex-start;flex-direction:column;gap:5px}}
