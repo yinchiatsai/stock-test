@@ -82,7 +82,7 @@
           <h2>生產扣庫</h2>
           <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
         </div>
-        <span class="badge info production-version-badge">V3.38 檔名日期批次前綴解析修正｜正式扣庫存尚未啟用</span>
+        <span class="badge info production-version-badge">V3.40 資料夾選取與拖曳一致｜正式扣庫存測試</span>
       </div>
 
       <div class="production-simple-steps" aria-label="生產扣庫流程">
@@ -182,7 +182,8 @@
           <span id="productionDeductReadyBadge" class="production-preview-badge is-idle">尚未分析</span>
         </div>
         <div id="productionDeductPreview" class="production-deduct-preview-empty">完成分析後會顯示預計扣除內容。</div>
-        <div class="production-deduct-footer"><div id="productionDeductTotals" class="production-deduct-totals"></div><button id="productionConfirmDeductBtn" type="button" disabled>確認扣庫存（尚未啟用）</button></div>
+        <div class="production-deduct-footer"><div id="productionDeductTotals" class="production-deduct-totals"></div><button id="productionConfirmDeductBtn" type="button" disabled>確認扣庫存</button></div>
+        <div id="productionDeductTransaction" class="production-transaction-status hidden"></div>
       </section>
 
       <details class="card production-secondary-details">
