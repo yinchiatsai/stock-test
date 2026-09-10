@@ -1533,3 +1533,113 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
 
 /* V3.35 batch progress */
 .production-session-group{margin-top:6px}.production-session-group-title{display:flex;justify-content:space-between;align-items:center;padding:7px 3px;color:#7b633b;font-size:12px}.production-session-group-title strong{font-size:13px;color:#8c641e}.production-session-group-title span{color:#849092}.production-session-folder{display:flex;flex-direction:column;gap:2px;min-width:0}.production-session-folder>strong{font-size:13px;color:#38585d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.production-session-folder>small{font-size:11px;color:#849092}.production-session-duplicate{display:inline-flex;width:max-content;margin-top:3px;padding:2px 7px;border-radius:999px;background:#fff1df;color:#9b651f;font-size:10px;font-weight:700}.production-session-completed{margin-top:10px;border-top:1px solid #edf1f1;padding-top:8px}.production-session-completed>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:7px 3px;color:#54786d;font-size:12px}.production-session-completed>summary strong{font-size:13px}.production-session-empty-state{padding:10px 12px;border-radius:9px;background:#f7fbf9;color:#56806f;font-size:12px;font-weight:700}.production-session-footnote{margin-top:10px;padding:8px 10px;border-radius:8px;background:#f7f8f8;color:#7c888a;font-size:11px;line-height:1.5}.production-simple-session .production-session-item.is-pending{box-shadow:inset 3px 0 0 #d4a554}.production-simple-session .production-session-item.is-analyzed{box-shadow:inset 3px 0 0 #79a792}@media(max-width:720px){.production-session-group-title,.production-session-completed>summary{align-items:flex-start;gap:6px}.production-session-folder>strong{white-space:normal}}
+
+/* V3.36：分析主操作移入本次生產資料 */
+.production-session-primary-action{display:flex;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid #edf1f1}
+.production-session-primary-action .production-main-action{min-width:190px}
+.production-session-primary-action .production-main-action:disabled{opacity:.6;cursor:default;box-shadow:none}
+@media(max-width:720px){.production-session-primary-action .production-main-action{width:100%;min-width:0}}
+
+
+/* V3.39 正式扣庫存測試 */
+.production-deduct-row .production-deduct-stock{color:var(--muted,#718184);font-size:13px;margin-left:auto;white-space:nowrap}
+.production-deduct-row.is-insufficient{background:#fff8f1;border-color:#efd6bb}
+.production-transaction-status{margin-top:14px;padding:14px 16px;border:1px solid #cfe2dc;border-radius:14px;background:#f4faf7;display:grid;grid-template-columns:1fr auto;gap:8px 16px;align-items:center}
+.production-transaction-status.hidden{display:none}
+.production-transaction-status>div{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.production-transaction-status>small{grid-column:1/2;color:var(--muted,#718184);line-height:1.5}
+.production-transaction-status.is-reverted{background:#f6f7f7;border-color:#dde4e3;grid-template-columns:1fr}
+.production-transaction-status.is-reverted>small{grid-column:auto}
+@media(max-width:760px){.production-transaction-status{grid-template-columns:1fr}.production-transaction-status>small{grid-column:auto}.production-transaction-status button{width:100%}.production-deduct-row .production-deduct-stock{margin-left:0;white-space:normal}}
+
+
+/* V3.42 - 扣庫存完成紀錄 UI 優化 */
+.production-transaction-status{
+  margin-top:16px;
+  padding:18px;
+  border:1px solid #dce8e4;
+  border-radius:16px;
+  background:#fbfdfc;
+  display:block;
+}
+.production-transaction-status.hidden{display:none}
+.production-transaction-head{
+  display:flex!important;
+  justify-content:space-between;
+  align-items:flex-start!important;
+  gap:18px!important;
+  margin-bottom:14px;
+}
+.production-transaction-head>div:first-child{
+  display:grid;
+  gap:4px;
+}
+.production-transaction-title{
+  display:block;
+  color:#29484e;
+  font-size:17px;
+  line-height:1.35;
+}
+.production-transaction-time{
+  color:#7a8b8e;
+  font-size:12px;
+  font-weight:700;
+}
+.production-transaction-summary{
+  color:#607579;
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.production-transaction-summary strong{color:#29484e}
+.production-transaction-items{
+  border:1px solid #e5ecea;
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+}
+.production-transaction-item-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  min-height:42px;
+  padding:9px 13px;
+  border-bottom:1px solid #edf2f0;
+}
+.production-transaction-item-row:last-child{border-bottom:0}
+.production-transaction-item-name{
+  min-width:0;
+  color:#314e53;
+  font-weight:800;
+  line-height:1.4;
+  word-break:break-word;
+}
+.production-transaction-item-qty{
+  flex:0 0 auto;
+  color:#a54c43;
+  font-size:14px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+}
+.production-transaction-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:14px;
+}
+.production-transaction-actions button{
+  min-width:170px;
+  border-radius:10px;
+}
+.production-transaction-status.is-reverted{
+  background:#f7f9f8;
+  border-color:#e0e7e5;
+}
+.production-transaction-status.is-reverted .production-transaction-item-qty{
+  color:#6c7d80;
+}
+@media(max-width:760px){
+  .production-transaction-head{display:grid!important;gap:8px!important}
+  .production-transaction-summary{white-space:normal}
+  .production-transaction-actions button{width:100%}
+}
