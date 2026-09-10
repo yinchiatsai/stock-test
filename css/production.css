@@ -1758,3 +1758,8 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
   .production-transaction-card .production-transaction-metric{min-width:0}
   .production-transaction-card .production-transaction-actions{margin-top:12px}
 }
+
+
+/* V3.46｜分析表直接顯示實際準備扣除的庫存品項，並與扣庫存計畫使用同一份 stockDetails */
+.production-map-deduct-target{color:#516d68!important;line-height:1.45!important;max-width:520px!important}.production-map-deduct-target>span{font-weight:800!important;color:#3e725a!important;margin-right:2px!important}
+@media(max-width:720px){.production-map-deduct-target{max-width:none!important;white-space:normal!important;font-size:11px!important}}
