@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.29 production analyzer; mapping quantities are final integer overrides (no per-unit stacking/decimal deduction).
+  // V3.30 production analyzer; mapping quantities are final integer overrides (no per-unit stacking/decimal deduction).
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -670,9 +670,30 @@
     return `${filename}||${issue}`;
   }
 
+  function learnedMappingKey(record, fallbackName = "") {
+    const name = String(record?.originalParsedProduct || record?.originalProduct || fallbackName || record?.product || "").trim();
+    const variants = Array.from(new Set([
+      ...((record?.originalColors || record?.colors || []).map(v => String(v || "").trim())),
+      ...((record?.originalVariantDetails || record?.variantDetails || []).map(v => String(v?.name || "").trim()))
+    ].filter(Boolean))).sort();
+    return variants.length ? `${name}||規格:${variants.join("+")}` : name;
+  }
+
+  function learnedMappingLabel(record, fallbackName = "") {
+    const name = String(record?.originalParsedProduct || record?.originalProduct || fallbackName || record?.product || "").trim();
+    const variants = Array.from(new Set([
+      ...((record?.originalColors || record?.colors || []).map(v => String(v || "").trim())),
+      ...((record?.originalVariantDetails || record?.variantDetails || []).map(v => String(v?.name || "").trim()))
+    ].filter(Boolean))).sort();
+    return variants.length ? `${name}（${variants.join("、")}）` : name;
+  }
+
   function applyManualItem(record) {
     const manual = runtimeRules.manualItems?.[record.path] || runtimeRules.manualItems?.[record.filename];
-    const learned = runtimeRules.productManualMappings?.[record.originalParsedProduct] || runtimeRules.productManualMappings?.[record.product];
+    const learnedKey = learnedMappingKey(record);
+    // 有規格/顏色的商品只讀取「商品＋規格」規則，避免舊的商品級規則把淺/深等不同細項一起覆蓋。
+    const hasVariantScope = learnedKey.includes("||規格:");
+    const learned = runtimeRules.productManualMappings?.[learnedKey] || (!hasVariantScope ? (runtimeRules.productManualMappings?.[record.originalParsedProduct] || runtimeRules.productManualMappings?.[record.product]) : null);
     const rule = manual || learned;
     if (!rule) return record;
     if (rule.details?.length) {
@@ -756,8 +777,10 @@
       quantity: parsed.quantity || 0,
       unit: parsed.unitHint || "件",
       colors: parsed.colors,
+      originalColors: [...(parsed.colors || [])],
       perColorQty: parsed.perColorQty,
       variantDetails: parsed.variantDetails || [],
+      originalVariantDetails: (parsed.variantDetails || []).map(v => ({ ...v })),
       stockDetails: buildStockDetails(parsed),
       qtyMode: parsed.qtyMode,
       side,
@@ -1870,6 +1893,8 @@
     productionPickerState = {
       recordKey: key,
       originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
+      learnedKey: learnedMappingKey(record),
+      learnedLabel: learnedMappingLabel(record),
       baseQty,
       details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
@@ -1884,12 +1909,12 @@
     const detectedQty = $("productionProductPickerDetectedQty");
     if (detectedQty) detectedQty.textContent = `${baseQty} ${record.unit || "件"}`;
 
-    const existingRule = runtimeRules.productManualMappings?.[productionPickerState.originalName];
+    const existingRule = runtimeRules.productManualMappings?.[productionPickerState.learnedKey];
     const existingRuleEl = $("productionProductPickerExistingRule");
     if (existingRuleEl) {
       if (existingRule) {
         existingRuleEl.classList.remove("hidden");
-        existingRuleEl.innerHTML = `<strong>已記住的扣庫存方式</strong><div>${escapeHtml(productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details, existingRule.mode || ""))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消記憶</button>`;
+        existingRuleEl.innerHTML = `<strong>已記住的扣庫存方式</strong><div>${escapeHtml(productionPickerState.learnedLabel || productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details, existingRule.mode || ""))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消記憶</button>`;
       } else {
         existingRuleEl.classList.add("hidden");
         existingRuleEl.innerHTML = "";
@@ -2090,7 +2115,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.29 對應數量整數覆蓋｜正式扣庫存尚未啟用";
+      el.textContent = "V3.30 對應數量整數覆蓋｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2240,6 +2265,7 @@ ${record.filename}
       }
       const permanent = !!$("productionProductPickerPermanent")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
+      const learnedKey = productionPickerState.learnedKey || learnedMappingKey(record, originalName);
       const previousProductRows = lastAnalysis?.summary?.productRows || [];
       const baseQty = Number(productionPickerState.baseQty || record.countedQuantity || record.quantity || 1) || 1;
       if (permanent) {
@@ -2249,23 +2275,18 @@ ${record.filename}
           unit: d.unit || record.unit || "件",
           note: "永久指定"
         }));
-        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { mode: "fixed", details: ruleDetails } };
+        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [learnedKey]: { mode: "fixed", details: ruleDetails } };
       } else {
         runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
       }
       saveRuntimeRules();
+      // 修改對應只作用在目前點選的來源檔。即使勾選「記住」，也不立即覆蓋本次分析中的其他同名檔案。
+      // 記住的規則只供未來重新分析時使用，且以「商品＋原始規格/顏色」為條件。
       currentSession.records.forEach(r => {
         const sameRecord = (r.path || r.filename) === productionPickerState.recordKey;
-        const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
-        if (sameRecord || sameLearnedName) {
-          r.statsOnly = false;
-          if (sameLearnedName && permanent) {
-            const finalDetails = productionPickerState.details.map(d => ({ ...d, quantity: Math.max(1, Math.round(Number(d.quantity || 1))) }));
-            applyStockDetailsToRecord(r, finalDetails, "永久指定");
-          } else {
-            applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
-          }
-        }
+        if (!sameRecord) return;
+        r.statsOnly = false;
+        applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
       });
       closeProductionProductPicker();
       lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
@@ -2300,7 +2321,7 @@ ${record.filename}
     });
     $("productionProductPickerExistingRule")?.addEventListener("click", event => {
       if (!event.target.closest("#productionPickerRemoveRuleBtn")) return;
-      removeLearningRule(productionPickerState.originalName);
+      removeLearningRule(productionPickerState.learnedKey || productionPickerState.originalName);
       const el = $("productionProductPickerExistingRule");
       if (el) { el.classList.add("hidden"); el.innerHTML = ""; }
       const permanent = $("productionProductPickerPermanent");
