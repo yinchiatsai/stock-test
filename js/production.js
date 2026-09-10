@@ -441,11 +441,18 @@
       colorsFromSpecText(group.text).forEach(pushColor);
     });
 
-    // 底線/連字號片段，例如：極細筆_玫瑰、右玫瑰、左黑、上銀、下黑
+    // 底線/連字號片段中的「獨立製作屬性」不可當成商品顏色。
+    // 規則：商品顏色若是白色，應以 (白) 表示；_白_ / _彩_ / _正彩_ / _鏡彩_ 等優先視為製作檔屬性。
+    // 其他確實以底線帶出的顏色仍保留支援，例如：極細筆_玫瑰、右玫瑰、左黑、上銀、下黑。
     text.split(/[_-]+/).map(x => x.trim()).filter(Boolean).forEach(seg => {
-      let cleaned = seg.replace(/[()（）]/g, "").trim();
+      const rawSegment = seg.replace(/[()（）]/g, "").trim();
+      if (normalizeProductionAttribute(rawSegment).attribute) return;
+
+      let cleaned = rawSegment;
       cleaned = cleaned.replace(/^(左|右|上|下|前|後|后)/, "").trim();
       cleaned = cleaned.replace(/\d+$/g, "").trim();
+      // 去掉方向字後如果剛好變成製作屬性，也不要當顏色。
+      if (normalizeProductionAttribute(cleaned).attribute) return;
       pushColor(cleaned);
     });
 
