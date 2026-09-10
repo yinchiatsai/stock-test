@@ -82,7 +82,7 @@
           <h2>生產扣庫</h2>
           <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
         </div>
-        <span class="badge info production-version-badge">V3.35 批次進度與重複上傳提示｜正式扣庫存尚未啟用</span>
+        <span class="badge info production-version-badge">V3.37 批次根資料夾與分析操作優化｜正式扣庫存尚未啟用</span>
       </div>
 
       <div class="production-simple-steps" aria-label="生產扣庫流程">
@@ -123,7 +123,6 @@
         </details>
 
         <div class="production-simple-folder-row production-drop-actions">
-          <button id="productionAnalyzeBtn" type="button" class="production-main-action">分析新增資料</button>
           <button id="productionClearBtn" class="secondary production-quiet-action" type="button">清除</button>
           <button id="productionExportCsvBtn" class="secondary production-quiet-action" type="button" disabled>匯出 CSV</button>
         </div>
@@ -135,6 +134,9 @@
         <div class="production-session-box production-simple-session">
           <div class="production-session-head"><strong>本次生產資料</strong><span id="productionSessionLabel">尚未建立</span></div>
           <div id="productionSessionList" class="production-session-list">加入資料夾後會顯示每批進度。</div>
+          <div class="production-session-primary-action">
+            <button id="productionAnalyzeBtn" type="button" class="production-main-action" disabled>分析新增資料</button>
+          </div>
         </div>
       </section>
 
@@ -676,7 +678,6 @@
       <div id="productionProductPickerExistingRule" class="production-picker-existing-rule hidden"></div>
       <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
 
-      <div class="production-picker-list-title">要扣除的庫存</div>
       <div id="productionProductPickerList" class="production-picker-list"></div>
 
       <div class="production-picker-add-row">
@@ -689,7 +690,7 @@
         </div>
         <div class="field production-picker-qty-field">
           <label>扣除數量</label>
-          <input id="productionProductPickerQty" type="number" min="0.01" step="0.01" value="1" />
+          <input id="productionProductPickerQty" type="number" min="1" step="1" inputmode="numeric" value="1" />
         </div>
       </div>
 
@@ -701,7 +702,6 @@
         <button type="button" class="production-picker-stats-link" id="productionPickerStatsOnlyBtn">這個商品不扣庫存</button>
       </div>
 
-      <div class="production-picker-rule-hint">例如「黃銅停車牌」可同時加入「黃銅片」與「木頭底座」。記住後，下次同商品會依製作數量自動換算。</div>
 
       <div class="modal-actions production-picker-actions">
         <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
