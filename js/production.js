@@ -628,7 +628,14 @@
     const rule = manual || learned;
     if (!rule) return record;
     if (rule.details?.length) {
-      applyStockDetailsToRecord(record, rule.details, manual ? "本次人工指定" : "永久指定");
+      const baseQty = Number(record.countedQuantity || record.quantity || 1) || 1;
+      const details = (rule.details || []).map(d => ({
+        ...d,
+        quantity: rule.mode === "per-unit"
+          ? Number(d.perUnitQty ?? d.quantity ?? 1) * baseQty
+          : Number(d.quantity || 1)
+      }));
+      applyStockDetailsToRecord(record, details, manual ? "本次人工指定" : "永久指定");
       return record;
     }
     if (rule.product) {
@@ -1368,12 +1375,17 @@
   function learnedRuleEntries() {
     return Object.entries(runtimeRules.productManualMappings || {}).map(([source, rule]) => ({
       source,
-      details: Array.isArray(rule?.details) ? rule.details : []
+      details: Array.isArray(rule?.details) ? rule.details : [],
+      mode: rule?.mode || ""
     }));
   }
 
-  function learnedRuleTargetText(details = []) {
-    return details.map(detail => `${detail.item}${Number(detail.quantity || 1) !== 1 ? ` × ${Number(detail.quantity || 1)}` : ""}`).join("、") || "未指定";
+  function learnedRuleTargetText(details = [], mode = "") {
+    return details.map(detail => {
+      const qty = mode === "per-unit" ? Number(detail.perUnitQty ?? detail.quantity ?? 1) : Number(detail.quantity || 1);
+      const suffix = mode === "per-unit" ? ` × ${qty}/件` : (qty !== 1 ? ` × ${qty}` : "");
+      return `${detail.item}${suffix}`;
+    }).join("、") || "未指定";
   }
 
   function renderLearningRules() {
@@ -1382,7 +1394,7 @@
     if (!el) return;
     const keyword = (learningSearchTerm || "").trim().toLowerCase();
     const all = learnedRuleEntries().sort((a, b) => a.source.localeCompare(b.source, "zh-Hant"));
-    const rows = keyword ? all.filter(row => `${row.source} ${learnedRuleTargetText(row.details)}`.toLowerCase().includes(keyword)) : all;
+    const rows = keyword ? all.filter(row => `${row.source} ${learnedRuleTargetText(row.details, row.mode)}`.toLowerCase().includes(keyword)) : all;
     if (hint) hint.textContent = keyword ? `顯示 ${rows.length} / ${all.length} 筆規則` : `${all.length} 筆規則`;
     if (!rows.length) {
       el.innerHTML = `<div class="production-side-empty">${keyword ? "沒有符合搜尋的規則。" : "目前沒有永久學習規則。"}</div>`;
@@ -1392,7 +1404,7 @@
       <div class="production-learning-rule-row">
         <div class="production-learning-rule-name">${escapeHtml(row.source)}</div>
         <div class="arrow">→</div>
-        <div class="production-learning-rule-target">${escapeHtml(learnedRuleTargetText(row.details))}</div>
+        <div class="production-learning-rule-target">${escapeHtml(learnedRuleTargetText(row.details, row.mode))}</div>
         <button type="button" class="secondary small danger-text production-learning-delete-btn" data-source="${escapeHtml(row.source)}">取消永久記憶</button>
       </div>`).join("");
   }
@@ -1400,7 +1412,7 @@
   function removeLearningRule(sourceName) {
     const source = String(sourceName || "");
     if (!source || !runtimeRules.productManualMappings?.[source]) return;
-    if (!confirm(`確定取消這筆永久記憶？\n\n${source} → ${learnedRuleTargetText(runtimeRules.productManualMappings[source].details)}\n\n只影響未來分析；目前畫面和既有庫存異動不會自動回復。`)) return;
+    if (!confirm(`確定取消這筆永久記憶？\n\n${source} → ${learnedRuleTargetText(runtimeRules.productManualMappings[source].details, runtimeRules.productManualMappings[source].mode || "")}\n\n只影響未來分析；目前畫面和既有庫存異動不會自動回復。`)) return;
     delete runtimeRules.productManualMappings[source];
     saveRuntimeRules();
     renderLearningRules();
@@ -1585,7 +1597,7 @@
   }
 
 
-  let productionPickerState = { recordKey: "", originalName: "", details: [], batch: false };
+  let productionPickerState = { recordKey: "", originalName: "", details: [], baseQty: 1 };
 
   function getInventoryProductOptions() {
     try {
@@ -1657,8 +1669,8 @@
     }
     list.innerHTML = productionPickerState.details.map((d, idx) => `
       <div class="production-picker-row">
-        <span>${escapeHtml(d.item)}</span>
-        <label style="display:flex;align-items:center;gap:6px">數量 <input class="production-picker-detail-qty" data-index="${idx}" type="number" min="1" step="1" value="${escapeHtml(d.quantity)}" style="width:90px"></label>
+        <div class="production-picker-item-name">${escapeHtml(d.item)}</div>
+        <label class="production-picker-row-qty"><span>扣除</span><input class="production-picker-detail-qty" data-index="${idx}" type="number" min="0.01" step="0.01" value="${escapeHtml(d.quantity)}"></label>
         <button type="button" class="secondary small production-picker-remove" data-index="${idx}">移除</button>
       </div>
     `).join("");
@@ -1671,59 +1683,41 @@
     renderProductionPickerOptions("");
     setProductionPickerMessage("");
     const key = record.path || record.filename;
+    const baseQty = Number(record.countedQuantity || record.quantity || 1) || 1;
     const hasManualDetails = (record.stockDetails || []).some(d => /人工指定|永久指定|本次指定/.test(d.note || record.manualNote || ""));
     productionPickerState = {
       recordKey: key,
       originalName: record.originalParsedProduct || record.originalProduct || record.product || "",
-      batch: false,
+      baseQty,
       details: hasManualDetails ? (record.stockDetails || []).filter(d => d.item && d.item !== "未解析").map(d => ({
         item: d.item,
-        quantity: Number(d.quantity || record.countedQuantity || 1),
+        quantity: Number(d.quantity || baseQty),
         unit: d.unit || record.unit || "件",
         variant: d.variant || "",
         note: "人工指定"
       })) : []
     };
     const title = $("productionProductPickerTitle");
-    if (title) title.textContent = record.filename || record.product || "指定商品";
+    if (title) title.textContent = record.filename || record.product || "處理商品";
+    const detectedQty = $("productionProductPickerDetectedQty");
+    if (detectedQty) detectedQty.textContent = `${baseQty} ${record.unit || "件"}`;
+
     const existingRule = runtimeRules.productManualMappings?.[productionPickerState.originalName];
     const existingRuleEl = $("productionProductPickerExistingRule");
     if (existingRuleEl) {
       if (existingRule) {
         existingRuleEl.classList.remove("hidden");
-        existingRuleEl.innerHTML = `<strong>目前已有永久記憶</strong><div>${escapeHtml(productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消永久記憶</button>`;
+        existingRuleEl.innerHTML = `<strong>已記住的扣庫存方式</strong><div>${escapeHtml(productionPickerState.originalName)} → ${escapeHtml(learnedRuleTargetText(existingRule.details, existingRule.mode || ""))}</div><button type="button" class="secondary small danger-text" id="productionPickerRemoveRuleBtn">取消記憶</button>`;
       } else {
         existingRuleEl.classList.add("hidden");
         existingRuleEl.innerHTML = "";
       }
     }
+
     const qty = $("productionProductPickerQty");
-    if (qty) qty.value = String(record.countedQuantity || record.quantity || 1);
+    if (qty) qty.value = String(baseQty);
     const permanent = $("productionProductPickerPermanent");
     if (permanent) permanent.checked = true;
-    // V3.20：批次指定與僅統計控制，直接注入既有視窗，不要求更換 index.html。
-    const modal = $("productionProductPickerModal");
-    const saveBtn = $("productionProductPickerSaveBtn");
-    if (modal && saveBtn) {
-      let tools = $("productionPickerV320Tools");
-      if (!tools) {
-        tools = document.createElement("div");
-        tools.id = "productionPickerV320Tools";
-        tools.style.cssText = "margin:14px 0;padding:12px 14px;border:1px solid #dfe8e7;border-radius:14px;background:#f8fbfa;display:grid;gap:10px";
-        saveBtn.parentElement?.insertBefore(tools, saveBtn.parentElement.firstChild);
-      }
-      const count = similarRecords(record).length;
-      tools.innerHTML = `<label style="display:flex;gap:8px;align-items:center"><input id="productionPickerBatch" type="checkbox" ${count > 1 ? "" : "disabled"}> 套用到同組相似檔案${count > 1 ? `（${count} 筆）` : ""}</label><button type="button" class="secondary" id="productionPickerStatsOnlyBtn">設為僅統計，不扣庫存</button><small style="color:#73868a">數量可直接在下方已加入品項中修正；批次套用時會套用相同對應方式。</small>`;
-      $("productionPickerStatsOnlyBtn")?.addEventListener("click", () => {
-        const permanentFlag = !!$("productionProductPickerPermanent")?.checked;
-        const batchFlag = !!$("productionPickerBatch")?.checked;
-        setStatsOnlyForRecord(record, permanentFlag, batchFlag);
-        closeProductionProductPicker();
-        lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
-        renderAnalysis(lastAnalysis);
-        updateProductionStatus(batchFlag ? "已將同組檔案設為僅統計，不扣庫存。" : "已設為僅統計，不扣庫存。", "done");
-      });
-    }
     renderProductionPickerList();
     if (typeof openModal === "function") openModal("productionProductPickerModal");
     else $("productionProductPickerModal")?.classList.add("show");
@@ -1882,10 +1876,10 @@ ${record.filename}
   function init() {
     if (!$("production")) return;
     // V3.20.1: ensure the V3.17+ compact UI stylesheet scope is active even when index.html is an older compatible version.
-    $("production").classList.add("production-center", "production-ux-v321");
+    $("production").classList.add("production-center", "production-ux-v322");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.21 簡化工作台｜正式扣庫存尚未啟用";
+      el.textContent = "V3.22 簡化扣庫設定｜正式扣庫存尚未啟用";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -1979,7 +1973,18 @@ ${record.filename}
         return;
       }
       productionPickerState.details[idx].quantity = qty;
-      setProductionPickerMessage("已修正本次計入數量。", "done");
+      setProductionPickerMessage("已更新扣除數量。", "done");
+    });
+    $("productionPickerStatsOnlyBtn")?.addEventListener("click", () => {
+      const record = currentSession.records.find(r => (r.path || r.filename) === productionPickerState.recordKey);
+      if (!record) return;
+      const permanentFlag = !!$("productionProductPickerPermanent")?.checked;
+      setStatsOnlyForRecord(record, permanentFlag, false);
+      closeProductionProductPicker();
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderAnalysis(lastAnalysis);
+      renderLearningRules();
+      updateProductionStatus(permanentFlag ? "已記住：這個商品僅統計、不扣庫存。" : "這個商品本次不扣庫存。", "done");
     });
     $("productionProductPickerCancelBtn")?.addEventListener("click", closeProductionProductPicker);
     $("productionProductPickerSaveBtn")?.addEventListener("click", () => {
@@ -1992,21 +1997,32 @@ ${record.filename}
       const permanent = !!$("productionProductPickerPermanent")?.checked;
       const originalName = productionPickerState.originalName || record.originalParsedProduct || record.product;
       const previousProductRows = lastAnalysis?.summary?.productRows || [];
+      const baseQty = Number(productionPickerState.baseQty || record.countedQuantity || record.quantity || 1) || 1;
       if (permanent) {
-        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { details: productionPickerState.details } };
+        const ruleDetails = productionPickerState.details.map(d => ({
+          item: d.item,
+          perUnitQty: Number(d.quantity || 0) / baseQty,
+          quantity: Number(d.quantity || 0) / baseQty,
+          unit: d.unit || record.unit || "件",
+          note: "永久指定"
+        }));
+        runtimeRules.productManualMappings = { ...(runtimeRules.productManualMappings || {}), [originalName]: { mode: "per-unit", details: ruleDetails } };
       } else {
         runtimeRules.manualItems = { ...(runtimeRules.manualItems || {}), [productionPickerState.recordKey]: { details: productionPickerState.details } };
       }
       saveRuntimeRules();
-      const batch = !!$("productionPickerBatch")?.checked;
-      const batchKeys = batch ? new Set(similarRecords(record).map(r => r.path || r.filename)) : new Set();
       currentSession.records.forEach(r => {
         const sameRecord = (r.path || r.filename) === productionPickerState.recordKey;
-        const sameBatch = batch && batchKeys.has(r.path || r.filename);
         const sameLearnedName = permanent && (r.originalParsedProduct === originalName || r.product === originalName);
-        if (sameRecord || sameBatch || sameLearnedName) {
+        if (sameRecord || sameLearnedName) {
           r.statsOnly = false;
-          applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : (batch ? "本次批次指定" : "本次指定"));
+          if (sameLearnedName && permanent) {
+            const rBaseQty = Number(r.countedQuantity || r.quantity || 1) || 1;
+            const scaled = productionPickerState.details.map(d => ({ ...d, quantity: (Number(d.quantity || 0) / baseQty) * rBaseQty }));
+            applyStockDetailsToRecord(r, scaled, "永久指定");
+          } else {
+            applyStockDetailsToRecord(r, productionPickerState.details, permanent ? "永久指定" : "本次指定");
+          }
         }
       });
       closeProductionProductPicker();
@@ -2014,7 +2030,7 @@ ${record.filename}
       captureAnalysisChange(previousProductRows, lastAnalysis);
       renderAnalysis(lastAnalysis);
       renderLearningRules();
-      updateProductionStatus(permanent ? "已永久記住指定商品規則。" : "已套用本次指定商品。", "done");
+      updateProductionStatus(permanent ? "已記住這個商品的扣庫存方式。" : "已套用本次扣庫存設定。", "done");
     });
     $("productionProductViewAllBtn")?.addEventListener("click", () => {
       productViewMode = "all";
