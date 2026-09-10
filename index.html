@@ -82,7 +82,7 @@
           <h2>生產扣庫</h2>
           <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
         </div>
-        <span class="badge info production-version-badge">V3.29 對應數量整數覆蓋｜正式扣庫存尚未啟用</span>
+        <span class="badge info production-version-badge">V3.35 批次進度與重複上傳提示｜正式扣庫存尚未啟用</span>
       </div>
 
       <div class="production-simple-steps" aria-label="生產扣庫流程">
@@ -98,7 +98,7 @@
 
       <section class="card production-simple-upload">
         <div class="production-simple-upload-head">
-          <div><h3>1. 選擇生產資料</h3><p class="note">可連續加入多個資料夾；系統會清楚標示「待分析／已分析」，只分析新增資料。</p></div>
+          <div><h3>1. 選擇生產資料</h3><p class="note">可連續加入多個資料夾；每批會顯示資料夾名稱、待分析／已分析狀態，重複檔案會自動略過並提示。</p></div>
           <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
         </div>
 
@@ -134,7 +134,7 @@
         <div id="productionSummaryCards" class="production-summary-grid"><div class="production-summary-empty">尚未分析</div></div>
         <div class="production-session-box production-simple-session">
           <div class="production-session-head"><strong>本次生產資料</strong><span id="productionSessionLabel">尚未建立</span></div>
-          <div id="productionSessionList" class="production-session-list">分析資料夾後會顯示。</div>
+          <div id="productionSessionList" class="production-session-list">加入資料夾後會顯示每批進度。</div>
         </div>
       </section>
 
@@ -151,10 +151,28 @@
 
       </section>
 
-      <section class="card production-simple-issues">
-        <div class="production-section-title-row"><div><h3>解析警告</h3><span class="production-section-hint">這裡只顯示檔名／來源解析異常；庫存對應請在上方「分析結果」處理。若指定商品後已解決解析問題，會自動從這裡消失。</span></div></div>
-        <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
-      </section>
+      <details id="productionIssueSection" class="card production-simple-issues production-issue-collapse">
+        <summary class="production-issue-summary">
+          <div>
+            <h3>解析警告</h3>
+            <span class="production-section-hint">預設收合；只有會影響判斷的項目需要處理，已成功計算的舊格式只列為提示。</span>
+          </div>
+          <div class="production-issue-summary-badges">
+            <span id="productionIssueActionCount" class="production-issue-count is-action">尚未分析</span>
+            <span id="productionIssueInfoCount" class="production-issue-count is-info"></span>
+          </div>
+        </summary>
+        <div id="productionIssuePanel" class="production-issue-panel">
+          <div class="production-issue-group">
+            <div class="production-issue-group-head"><strong>⚠ 需要處理</strong><span>可能影響數量、商品判斷或合併結果</span></div>
+            <div id="productionIssueActionResult" class="production-table-wrap">尚未分析</div>
+          </div>
+          <details class="production-issue-info-group">
+            <summary><strong>ⓘ 格式提示</strong><span id="productionIssueInfoSummary">已成功解析，不需要操作</span></summary>
+            <div id="productionIssueInfoResult" class="production-table-wrap">尚未分析</div>
+          </details>
+        </div>
+      </details>
 
       <section class="card production-simple-deduct">
         <div class="production-simple-deduct-head">
