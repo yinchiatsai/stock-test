@@ -1467,3 +1467,30 @@ main:has(#production:not(.hidden)) {
   .production-inline-source-item{align-items:flex-start!important;flex-direction:column!important;gap:8px!important}
   .production-inline-source-actions{width:100%;justify-content:flex-end}
 }
+
+/* ===== V3.25 多資料夾拖曳 + 頁面窄版 ===== */
+main:has(#production:not(.hidden)){max-width:1240px!important}
+#production.production-center{width:min(94vw,1180px)!important;max-width:1180px!important}
+.production-drop-zone{
+  min-height:150px;margin-top:4px;padding:22px 20px;border:2px dashed #cbd9d7;border-radius:14px;
+  background:#fbfcfc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  text-align:center;color:#607477;transition:.16s ease;outline:none
+}
+.production-drop-zone.is-dragover{border-color:#3e6066;background:#f0f6f5;box-shadow:0 0 0 4px rgba(62,96,102,.08)}
+.production-drop-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#e8f0ef;color:#3e6066;font-size:24px;line-height:1;font-weight:500}
+.production-drop-zone>strong{font-size:16px;color:#334f53}
+.production-drop-zone>span{font-size:12px;color:#849294}
+.production-drop-zone .production-folder-button{margin-top:6px;padding:8px 14px;border:1px solid #d7e1df;border-radius:8px;background:#fff;color:#3e6066;font-size:12px;font-weight:800;cursor:pointer}
+.production-drop-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;padding:9px 12px;border-radius:9px;background:#f6f8f8;color:#718184;font-size:12px}
+.production-drop-summary strong{color:#3e6066}.production-drop-summary span{min-width:0;overflow-wrap:anywhere}
+.production-advanced-input{margin-top:10px;color:#718184;font-size:12px}
+.production-advanced-input>summary{cursor:pointer;display:inline-block;font-weight:700;color:#718184}
+.production-advanced-input .production-simple-fields{margin-top:10px;padding:12px;border:1px solid #e8eded;border-radius:10px;background:#fafbfb}
+.production-drop-actions{justify-content:flex-end!important;border-top:0!important;margin-top:10px!important;padding-top:0!important}
+.production-drop-actions .production-main-action{min-width:150px}
+@media(max-width:760px){
+  #production.production-center{width:min(96vw,1180px)!important}
+  .production-drop-zone{min-height:135px;padding:18px 12px}
+  .production-drop-summary{display:block}.production-drop-summary span{display:block;margin-top:5px}
+  .production-drop-actions>*{width:auto!important}.production-drop-actions .production-main-action{flex:1}
+}
