@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.39 production analyzer; enables real inventory deduction with reversible transaction history.
+  // V3.42 production analyzer; real inventory deduction supports negative stock with warning and reversible transaction history; completed transaction UI refined.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1880,14 +1880,39 @@
       box.innerHTML = "";
       return;
     }
-    const items = (tx.items || []).map(row => `${escapeHtml(row.itemName)} −${escapeHtml(row.quantity)}`).join("、");
+    const txItems = Array.isArray(tx.items) ? tx.items : [];
+    const totalQty = txItems.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+    const itemRows = txItems.map(row => `
+      <div class="production-transaction-item-row">
+        <span class="production-transaction-item-name">${escapeHtml(row.itemName || "未命名品項")}</span>
+        <strong class="production-transaction-item-qty">−${escapeHtml(Number(row.quantity) || 0)}</strong>
+      </div>`).join("");
     if (tx.status === "reverted") {
       box.className = "production-transaction-status is-reverted";
-      box.innerHTML = `<div><strong>↩ 此次扣庫存已復原</strong><span>${escapeHtml(tx.revertedAtText || "")}</span></div><small>${items}</small>`;
+      box.innerHTML = `
+        <div class="production-transaction-head">
+          <div>
+            <strong class="production-transaction-title">↩ 此次扣庫存已復原</strong>
+            <span class="production-transaction-time">${escapeHtml(tx.revertedAtText || "")}</span>
+          </div>
+          <div class="production-transaction-summary">${txItems.length} 個品項・${totalQty} 件</div>
+        </div>
+        <div class="production-transaction-items">${itemRows}</div>`;
       return;
     }
     box.className = "production-transaction-status is-active";
-    box.innerHTML = `<div><strong>✓ 已完成扣庫存</strong><span>${escapeHtml(tx.createdAtText || "")}</span></div><small>${items}</small><button type="button" class="secondary" id="productionUndoDeductBtn">復原此次扣庫存</button>`;
+    box.innerHTML = `
+      <div class="production-transaction-head">
+        <div>
+          <strong class="production-transaction-title">✓ 已完成扣庫存</strong>
+          <span class="production-transaction-time">${escapeHtml(tx.createdAtText || "")}</span>
+        </div>
+        <div class="production-transaction-summary">本次共扣除 <strong>${txItems.length}</strong> 個品項・<strong>${totalQty}</strong> 件</div>
+      </div>
+      <div class="production-transaction-items">${itemRows}</div>
+      <div class="production-transaction-actions">
+        <button type="button" class="secondary" id="productionUndoDeductBtn">復原此次扣庫存</button>
+      </div>`;
     $("productionUndoDeductBtn")?.addEventListener("click", undoProductionDeduction);
   }
 
@@ -1923,7 +1948,7 @@
           <strong>${escapeHtml(row.item.name)}</strong>
           <span class="production-deduct-stock">目前 ${escapeHtml(row.stock)} → 扣後 <b>${escapeHtml(row.after)}</b></span>
           <span class="production-deduct-qty">-${escapeHtml(row.quantity)} 件</span>
-          <span class="production-deduct-status ${row.insufficient ? 'is-warning' : ''}">${row.insufficient ? '庫存不足' : '可扣減'}</span>
+          <span class="production-deduct-status ${row.insufficient ? 'is-warning' : ''}">${row.insufficient ? '庫存不足・可扣成負庫存' : '可扣減'}</span>
         </div>`).join('');
     }
 
@@ -1933,13 +1958,13 @@
     if (unmappedProducts) blockers.push(`${unmappedProducts} 個商品待對應`);
     if (issueCount) blockers.push(`${issueCount} 筆解析警告`);
     if (plan.unmapped.length) blockers.push(`${plan.unmapped.length} 個庫存品項無法找到`);
-    if (plan.insufficient.length) blockers.push(`${plan.insufficient.length} 個品項庫存不足`);
     if (plan.duplicateSourceKeys.length) blockers.push(`${plan.duplicateSourceKeys.length} 個來源檔已扣過`);
     if (existingTx?.status === "active") blockers.push('本次工作階段已完成扣庫存');
 
     const ready = blockers.length === 0 && plan.rows.length > 0;
-    badge.className = `production-preview-badge ${ready ? 'is-ready' : 'is-warning'}`;
-    badge.textContent = ready ? '✓ 已可扣庫存' : blockers.join('｜');
+    const negativeWarning = plan.insufficient.length ? `${plan.insufficient.length} 個品項將扣成負庫存` : '';
+    badge.className = `production-preview-badge ${ready ? (negativeWarning ? 'is-warning' : 'is-ready') : 'is-warning'}`;
+    badge.textContent = ready ? (negativeWarning ? `✓ 可扣庫存｜${negativeWarning}` : '✓ 已可扣庫存') : blockers.join('｜');
     if (button) {
       button.disabled = !ready;
       button.textContent = ready ? `確認扣庫存（${totalQty} 件）` : (existingTx?.status === "active" ? '本次已扣庫存' : '確認扣庫存');
@@ -1952,7 +1977,7 @@
     const plan = buildDeductionPlan(lastAnalysis);
     const issueCount = actionableIssues(lastAnalysis).length;
     const unmappedProducts = (lastAnalysis.summary?.productRows || []).filter(row => !["mapped","stats"].includes(productInventoryMappingStatus(row.name).status)).length;
-    if (issueCount || unmappedProducts || plan.unmapped.length || plan.insufficient.length || plan.duplicateSourceKeys.length || !plan.rows.length) {
+    if (issueCount || unmappedProducts || plan.unmapped.length || plan.duplicateSourceKeys.length || !plan.rows.length) {
       renderDeductPreview(lastAnalysis);
       updateProductionStatus("目前仍有項目無法安全扣庫存，請先確認扣庫存區的提示。", "error");
       return;
@@ -1976,7 +2001,6 @@
         if (!item) throw new Error(`找不到庫存品項：${row.item.name}`);
         const oldStock = Number(item.stock || 0);
         const newStock = oldStock - row.quantity;
-        if (newStock < 0) throw new Error(`庫存不足：${item.name}`);
         item.stock = newStock;
         txItems.push({ itemId: item.id, itemName: item.name, quantity: row.quantity, oldStock, newStock });
         if (typeof addStockHistory === "function") addStockHistory(item, oldStock, newStock, "生產扣庫", `生產交易 ${txId}`);
@@ -2723,7 +2747,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.40 資料夾選取與拖曳一致｜正式扣庫存測試";
+      el.textContent = "V3.42 扣庫存完成紀錄 UI 優化";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -2763,7 +2787,7 @@ ${record.filename}
       }
     });
 
-    // V3.40：資料夾「選取」與「拖曳」必須走同一套加入佇列邏輯。
+    // V3.42：保留 V3.41 資料夾選取/拖曳一致邏輯；本版優化扣庫存完成紀錄 UI。
     // 過去選取資料夾只更新提示文字，沒有加入 droppedProductionEntries，
     // 因此右側「本次生產資料」看不到批次。現在統一加入、去重、顯示待分析狀態。
     function addEntriesToProductionQueue(incoming, sourceLabel = "資料夾") {
