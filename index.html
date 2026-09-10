@@ -82,7 +82,7 @@
           <h2>生產扣庫</h2>
           <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
         </div>
-        <span class="badge info production-version-badge">V3.21 簡化工作台｜正式扣庫存尚未啟用</span>
+        <span class="badge info production-version-badge">V3.28 解析警告分流｜正式扣庫存尚未啟用</span>
       </div>
 
       <div class="production-simple-steps" aria-label="生產扣庫流程">
@@ -152,13 +152,13 @@
       </section>
 
       <section class="card production-simple-issues">
-        <div class="production-section-title-row"><div><h3>需要處理</h3><span class="production-section-hint">只有無法自動判斷的資料會留在這裡；處理後可永久記住規則。</span></div></div>
+        <div class="production-section-title-row"><div><h3>解析警告</h3><span class="production-section-hint">這裡只顯示檔名／來源解析異常；庫存對應請在上方「分析結果」處理。若指定商品後已解決解析問題，會自動從這裡消失。</span></div></div>
         <div id="productionIssueResult" class="production-table-wrap">尚未分析</div>
       </section>
 
       <section class="card production-simple-deduct">
         <div class="production-simple-deduct-head">
-          <div><h3>3. 準備扣庫存</h3><p>待確認為 0 後即可進入扣庫存。</p></div>
+          <div><h3>3. 準備扣庫存</h3><p>庫存待對應與解析警告都清除後即可進入扣庫存。</p></div>
           <span id="productionDeductReadyBadge" class="production-preview-badge is-idle">尚未分析</span>
         </div>
         <div id="productionDeductPreview" class="production-deduct-preview-empty">完成分析後會顯示預計扣除內容。</div>
