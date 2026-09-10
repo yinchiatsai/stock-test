@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.30 production analyzer; mapping quantities are final integer overrides (no per-unit stacking/decimal deduction).
+  // V3.31 production analyzer; adds paired 正面/旋轉面 production-file merge while preserving existing side rules.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -51,7 +51,8 @@
     printLayer: ["白", "彩", "白檔", "彩檔", "底白", "底色", "鏡彩", "正彩"],
     insideOutside: ["內", "内", "外", "裡", "裡面", "里面", "外面"],
     faceCount: ["單", "单", "雙", "双", "單面", "双面", "雙面"],
-    engraving: ["有刻", "沒刻", "无刻", "不刻", "刻白", "刻黑"]
+    engraving: ["有刻", "沒刻", "无刻", "不刻", "刻白", "刻黑"],
+    presentationFace: ["旋轉面"]
   };
   const KNOWN_PRODUCTION_ATTRIBUTES = Object.values(PRODUCTION_ATTRIBUTE_FAMILIES).flat();
   const KNOWN_COLORS = ["玫瑰金", "玫瑰", "霧黑", "霧銀", "霧金", "胡桃棕", "花梨木", "原木", "透明", "奶茶", "深", "淺", "大", "小", "金", "銀", "黑", "白", "紅", "藍", "綠", "紫", "粉", "灰"];
@@ -384,6 +385,7 @@
     if (["正", "正面"].includes(value)) return { attribute: "正", family: "side" };
     if (["背", "背面"].includes(value)) return { attribute: "背", family: "side" };
     if (["反", "反面"].includes(value)) return { attribute: "反", family: "side" };
+    if (["旋轉面"].includes(value)) return { attribute: "旋轉面", family: "presentationFace" };
     if (["白", "白檔", "底白", "底色"].includes(value)) return { attribute: "白", family: "printLayer" };
     if (["彩", "彩檔"].includes(value)) return { attribute: "彩", family: "printLayer" };
     if (["鏡彩"].includes(value)) return { attribute: "鏡彩", family: "printLayer" };
@@ -426,7 +428,7 @@
       const normalized = normalizeProductionAttribute(segment);
       if (normalized.attribute) return normalized;
     }
-    const m = text.match(/[_-](正面?|背面?|反面?|白檔?|彩檔?|底白|底色|鏡彩|正彩|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?|有刻|沒刻|无刻|不刻)\d*($|[_-])/);
+    const m = text.match(/[_-](旋轉面|正面?|背面?|反面?|白檔?|彩檔?|底白|底色|鏡彩|正彩|內|内|外|裡面?|里面|外面|單面?|单|雙面?|双面?|有刻|沒刻|无刻|不刻)\d*($|[_-])/);
     if (m) return normalizeProductionAttribute(m[1]);
     const attached = detectAttachedPrintLayer(text);
     if (attached.attribute) return attached;
@@ -931,6 +933,43 @@
     });
   }
 
+  function applyPairedPresentationFaceMerge(records) {
+    // 特例：兩用名片架等製作檔會以「正面 + 旋轉面」成對出現。
+    // 「正面」仍保留既有 side 屬性，避免破壞其他商品的正/背合併；
+    // 這裡另外以相同 identity 判斷正面與旋轉面為同一件，只計一次。
+    const groups = new Map();
+    records.forEach(record => {
+      if (record.folderPriority) return;
+      const isFront = record.productionAttributeFamily === "side" && record.productionAttribute === "正";
+      const isRotate = record.productionAttributeFamily === "presentationFace" && record.productionAttribute === "旋轉面";
+      if (!isFront && !isRotate) return;
+      const mergeIdentity = String(record.identity || record.filename || "")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[\s_-]+/g, "")
+        .toLowerCase();
+      const key = `${record.date}|${record.process}|${record.source}|${record.product}|${record.quantity}|${mergeIdentity}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(record);
+    });
+
+    groups.forEach(group => {
+      const hasFront = group.some(r => r.productionAttributeFamily === "side" && r.productionAttribute === "正");
+      const hasRotate = group.some(r => r.productionAttributeFamily === "presentationFace" && r.productionAttribute === "旋轉面");
+      if (!hasFront || !hasRotate) return;
+
+      // 優先保留正面為計數檔；若沒有則保留第一筆。
+      const primary = group.find(r => r.productionAttributeFamily === "side" && r.productionAttribute === "正") || group[0];
+      group.forEach(record => {
+        record.mergeReason = "正面/旋轉面製作檔合併";
+        if (record !== primary) {
+          record.countedQuantity = 0;
+          record.stockDetails = [];
+          record.mergedByProductionAttribute = true;
+        }
+      });
+    });
+  }
+
   function applyProductionAttributeMerge(records) {
     const groups = new Map();
     records.forEach(record => {
@@ -970,6 +1009,7 @@
   }
 
   function applySideMerge(records) {
+    applyPairedPresentationFaceMerge(records);
     applyProductionAttributeMerge(records);
   }
 
