@@ -1158,51 +1158,78 @@
     return `<span class="production-map-badge is-unmapped">⚠ 尚未對應</span>${state.unmappedNames.length ? `<div class="production-map-target">解析：${escapeHtml(state.unmappedNames.join("、"))}</div>` : ""}`;
   }
 
-  function renderProductDetailPanel(productName) {
-    const el = $("productionProductDetailPanel");
-    if (!el) return;
+  function buildProductDetailHtml(productName) {
     if (!lastAnalysis || !productName) {
-      el.innerHTML = `<div class="production-side-empty">點選左側商品後，這裡會顯示計入該品項的檔案明細。</div>`;
-      return;
+      return `<div class="production-side-empty">點選商品名稱即可查看計入此商品的檔案。</div>`;
     }
     const rows = lastAnalysis.records.filter(record => recordContributesToProduct(record, productName));
     if (!rows.length) {
-      el.innerHTML = `<div class="production-side-empty">目前沒有找到「${escapeHtml(productName)}」的來源明細。</div>`;
-      return;
+      return `<div class="production-side-empty">目前沒有找到「${escapeHtml(productName)}」的來源明細。</div>`;
     }
     const total = rows.reduce((sum, r) => sum + productQuantityFromRecord(r, productName), 0);
-    el.innerHTML = `
-      <div class="production-side-head">
+    const countedFiles = rows.filter(r => productQuantityFromRecord(r, productName) > 0).length;
+    const mergedFiles = rows.length - countedFiles;
+    return `
+      <div class="production-side-head production-inline-source-head">
         <div>
-          <div class="production-side-label">目前選取商品</div>
+          <div class="production-side-label">計入來源檔案</div>
           <h4>${escapeHtml(productName)}</h4>
+          <div class="production-inline-source-summary">${escapeHtml(rows.length)} 個檔案｜實際計入 ${escapeHtml(countedFiles)} 個${mergedFiles > 0 ? `｜合併 ${escapeHtml(mergedFiles)} 個` : ""}</div>
         </div>
         <strong>${escapeHtml(total)} 件</strong>
       </div>
-      <div class="production-side-list">
-        ${rows.map(r => `
-          <div class="production-side-item">
-            <div class="production-side-item-top">
-              <strong>${escapeHtml(productQuantityFromRecord(r, productName))} 件</strong>
-              <span>${escapeHtml(r.mergeReason || (r.mergedByFolder ? "資料夾優先" : r.productionAttribute || ""))}</span>
-            </div>
-            <div class="production-side-file">${escapeHtml(r.filename)}</div>
-            <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}｜${escapeHtml(r.tags?.join("、") || "無標籤")}</div>
-            ${(() => {
-              const mapState = recordInventoryMapping(r, productName);
-              const mapped = mapState.mapped.map(d => d.officialName || d.item);
-              const unmapped = mapState.unmapped.map(d => d.item);
-              if (!mapState.details.length) return `<div class="production-side-map is-unmapped"><strong>⚠ 尚未對應庫存</strong><span>此筆目前沒有可扣料的庫存品項。</span></div>`;
-              if (!unmapped.length) return `<div class="production-side-map is-mapped"><strong>✓ 已對應庫存</strong><span>${escapeHtml(Array.from(new Set(mapped)).join("、"))}</span></div>`;
-              return `<div class="production-side-map is-unmapped"><strong>⚠ 尚未完整對應</strong><span>${escapeHtml(Array.from(new Set(unmapped)).join("、"))}</span></div>`;
-            })()}
-            <div class="production-side-actions">
-              <button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">${recordInventoryMapping(r, productName).unmapped.length ? "指定庫存商品" : "重新指定"}</button>
-              <button type="button" class="secondary small danger-text production-record-remove-btn" data-key="${escapeHtml(r.path || r.filename)}">移除此檔</button>
-            </div>
-          </div>
-        `).join("")}
+      <div class="production-side-list production-inline-source-list">
+        ${rows.map(r => {
+          const qty = productQuantityFromRecord(r, productName);
+          const isCounted = qty > 0;
+          const mergeText = r.mergeReason || (r.mergedByFolder ? "資料夾優先合併" : "");
+          const mapState = recordInventoryMapping(r, productName);
+          const mapped = mapState.mapped.map(d => d.officialName || d.item);
+          const unmapped = mapState.unmapped.map(d => d.item);
+          const mapHtml = isStatsOnlyRecord(r, productName)
+            ? `<span class="production-inline-file-map is-stats">僅統計</span>`
+            : (!mapState.details.length || unmapped.length)
+              ? `<span class="production-inline-file-map is-warning">需確認庫存對應</span>`
+              : `<span class="production-inline-file-map is-ok">${escapeHtml(Array.from(new Set(mapped)).join("、"))}</span>`;
+          return `
+            <div class="production-side-item production-inline-source-item ${isCounted ? "is-counted" : "is-merged"}">
+              <div class="production-inline-source-main">
+                <div class="production-inline-source-status">
+                  <span class="production-file-count-badge ${isCounted ? "is-counted" : "is-merged"}">${isCounted ? `計入 ${escapeHtml(qty)}` : "已合併・不重複計數"}</span>
+                  ${mapHtml}
+                </div>
+                <div class="production-side-file">${escapeHtml(r.filename)}</div>
+                <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}${mergeText ? `｜${escapeHtml(mergeText)}` : ""}</div>
+              </div>
+              <div class="production-inline-source-actions">
+                ${isCounted && !isStatsOnlyRecord(r, productName) ? `<button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">修改對應</button>` : ""}
+                <button type="button" class="secondary small danger-text production-record-remove-btn" data-key="${escapeHtml(r.path || r.filename)}">移除</button>
+              </div>
+            </div>`;
+        }).join("")}
       </div>`;
+  }
+
+  function renderProductDetailPanel(productName) {
+    const el = $("productionProductDetailPanel");
+    if (!el) return;
+    el.innerHTML = buildProductDetailHtml(productName);
+  }
+
+  function renderInlineProductDetail(productName) {
+    const result = $("productionProductResult");
+    if (!result) return;
+    result.querySelectorAll(".production-product-inline-detail-row").forEach(row => row.remove());
+    if (!productName) return;
+    const button = Array.from(result.querySelectorAll(".production-product-select-btn"))
+      .find(btn => btn.dataset.product === productName);
+    const row = button?.closest("tr");
+    if (!row) return;
+    row.classList.add("is-detail-open");
+    const detailRow = document.createElement("tr");
+    detailRow.className = "production-product-inline-detail-row";
+    detailRow.innerHTML = `<td colspan="5"><div class="production-product-inline-detail-box">${buildProductDetailHtml(productName)}</div></td>`;
+    row.insertAdjacentElement("afterend", detailRow);
   }
 
   function reviewSuggestion(record) {
@@ -1320,7 +1347,7 @@
           : row._change?.type === "updated"
             ? `<span class="production-change-badge is-updated">${row._change.delta > 0 ? "+" : ""}${escapeHtml(row._change.delta)}</span>`
             : "";
-        return `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${badge}${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}`;
+        return `<button type="button" class="production-product-select-btn ${row.name === selectedProductName ? "is-active" : ""}" data-product="${escapeHtml(row.name)}"><span class="production-product-toggle-icon">${row.name === selectedProductName ? "▾" : "▸"}</span>${escapeHtml(row.name)}</button>${badge}${row.variants?.length ? `<div class="production-variant-list">${row.variants.map(v => `<span>${escapeHtml(v.name)} ${escapeHtml(v.quantity)}</span>`).join("")}</div>` : ""}`;
       } },
       { label: "數量", key: "quantity", num: true },
       { label: "單位", key: "unit" },
@@ -1331,7 +1358,8 @@
         return `<button type="button" class="secondary small production-product-map-btn" data-product="${escapeHtml(row.name)}">處理</button>`;
       } }
     ], keyword ? "沒有符合搜尋的商品" : "尚無商品統計");
-    renderProductDetailPanel(selectedProductName || productRows[0]?.name || "");
+    renderInlineProductDetail(selectedProductName);
+    renderProductDetailPanel(selectedProductName);
     renderSimpleTable($("productionSourceResult"), analysis.summary.sourceRows, [
       { label: "平台", key: "name" },
       { label: "數量", key: "quantity", num: true }
@@ -1551,9 +1579,9 @@
   function handleProductSelectAction(event) {
     const btn = event.target.closest(".production-product-select-btn");
     if (!btn) return false;
-    selectedProductName = btn.dataset.product || "";
-    renderProductDetailPanel(selectedProductName);
-    document.querySelectorAll(".production-product-select-btn").forEach(b => b.classList.toggle("is-active", b.dataset.product === selectedProductName));
+    const product = btn.dataset.product || "";
+    selectedProductName = selectedProductName === product ? "" : product;
+    if (lastAnalysis) renderAnalysis(lastAnalysis);
     return true;
   }
 
@@ -1748,6 +1776,34 @@
     if (note) record.manualNote = note;
   }
 
+  function promoteRemainingMergedRecord(removedRecord) {
+    if (!removedRecord) return;
+    let candidates = [];
+    if (removedRecord.folderPriority && removedRecord.folderName) {
+      candidates = currentSession.records.filter(r =>
+        r.process === removedRecord.process &&
+        r.folderName === removedRecord.folderName
+      );
+    } else if (removedRecord.productionAttributeFamily) {
+      const identity = String(removedRecord.identity || "").replace(/[\s_-]+/g, "").toLowerCase();
+      candidates = currentSession.records.filter(r =>
+        r.date === removedRecord.date &&
+        r.process === removedRecord.process &&
+        r.source === removedRecord.source &&
+        r.productionAttributeFamily === removedRecord.productionAttributeFamily &&
+        String(r.identity || "").replace(/[\s_-]+/g, "").toLowerCase() === identity
+      );
+    }
+    if (!candidates.length || candidates.some(r => Number(r.countedQuantity || 0) > 0)) return;
+    const promoted = candidates[0];
+    promoted.countedQuantity = Number(promoted.quantity || 0);
+    promoted.mergedByFolder = false;
+    promoted.mergedByProductionAttribute = false;
+    promoted.mergedBySide = false;
+    promoted.mergeReason = candidates.length > 1 ? promoted.mergeReason : "";
+    if (!isStatsOnlyRecord(promoted)) rebuildStockDetailsForRecord(promoted);
+  }
+
   function removeProductionRecord(recordKey) {
     const key = String(recordKey || "");
     if (!key) return;
@@ -1760,6 +1816,7 @@ ${record.filename}
 只會影響目前分析結果，不會刪除原始檔案，也不會寫入庫存。`);
     if (!ok) return;
     currentSession.records = currentSession.records.filter(r => (r.path || r.filename) !== key);
+    promoteRemainingMergedRecord(record);
     if (!currentSession.records.length) {
       resetSession();
       updateProductionStatus("已移除最後一筆檔案，目前沒有分析資料。", "idle");
@@ -1942,6 +1999,10 @@ ${record.filename}
     $("productionIssueResult")?.addEventListener("click", handleIssueAction);
     $("productionSessionList")?.addEventListener("click", handleSessionAction);
     $("productionProductResult")?.addEventListener("click", event => {
+      if (event.target.closest(".production-record-remove-btn, .production-record-product-btn")) {
+        handleRecordProductAction(event);
+        return;
+      }
       if (handleProductSelectAction(event)) return;
       if (handleProductMapAction(event)) return;
       handleProductAliasAction(event);
