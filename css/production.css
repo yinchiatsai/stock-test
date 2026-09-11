@@ -1763,3 +1763,82 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
 /* V3.46｜分析表直接顯示實際準備扣除的庫存品項，並與扣庫存計畫使用同一份 stockDetails */
 .production-map-deduct-target{color:#516d68!important;line-height:1.45!important;max-width:520px!important}.production-map-deduct-target>span{font-weight:800!important;color:#3e725a!important;margin-right:2px!important}
 @media(max-width:720px){.production-map-deduct-target{max-width:none!important;white-space:normal!important;font-size:11px!important}}
+
+/* V3.47｜扣庫存交易紀錄改為可收合卡片；桌機最新一筆預設展開，手機全部預設收合 */
+.production-transaction-card{
+  overflow:hidden;
+  padding:0!important;
+}
+.production-transaction-card>summary{
+  list-style:none;
+  cursor:pointer;
+  padding:18px 20px;
+  user-select:none;
+}
+.production-transaction-card>summary::-webkit-details-marker{display:none}
+.production-transaction-card>summary::marker{display:none;content:""}
+.production-transaction-summary-row:focus-visible{
+  outline:3px solid rgba(62,96,102,.18);
+  outline-offset:-3px;
+  border-radius:18px;
+}
+.production-transaction-summary-row .production-transaction-head{
+  display:grid!important;
+  grid-template-columns:minmax(220px,1fr) auto auto;
+  gap:16px!important;
+  align-items:center!important;
+}
+.production-transaction-toggle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  min-width:58px;
+  font-size:12px;
+  font-weight:900;
+  color:#688084;
+  white-space:nowrap;
+}
+.production-transaction-toggle b{
+  display:inline-block;
+  font-size:17px;
+  line-height:1;
+  transition:transform .18s ease;
+  transform-origin:center;
+}
+.production-transaction-card[open] .production-transaction-toggle b{transform:rotate(180deg)}
+.production-transaction-card .when-open{display:none}
+.production-transaction-card[open] .when-open{display:inline}
+.production-transaction-card[open] .when-closed{display:none}
+.production-transaction-body{padding:0 20px 18px}
+.production-transaction-card:not([open]) .production-transaction-body{display:none}
+.production-transaction-card:not([open])>summary:hover{background:rgba(62,96,102,.025)}
+.production-transaction-card.is-reverted>summary{background:rgba(246,249,248,.72)}
+
+@media(max-width:760px){
+  .production-transaction-card>summary{padding:14px 14px}
+  .production-transaction-summary-row .production-transaction-head{
+    grid-template-columns:1fr auto!important;
+    gap:10px!important;
+  }
+  .production-transaction-summary-row .production-transaction-heading{min-width:0}
+  .production-transaction-summary-row .production-transaction-metrics{
+    grid-column:1/-1;
+    display:flex!important;
+    gap:6px!important;
+    width:100%;
+    overflow:hidden;
+  }
+  .production-transaction-summary-row .production-transaction-metric{
+    flex:1 1 0;
+    min-width:0!important;
+    padding:8px 7px!important;
+  }
+  .production-transaction-summary-row .production-transaction-metric:first-child{grid-column:auto!important}
+  .production-transaction-summary-row .production-transaction-metric span{font-size:9px!important}
+  .production-transaction-summary-row .production-transaction-metric strong{font-size:13px!important;white-space:nowrap}
+  .production-transaction-toggle{align-self:start;margin-top:4px;min-width:48px;font-size:11px}
+  .production-transaction-body{padding:0 14px 14px}
+  .production-transaction-title{font-size:15px!important}
+  .production-transaction-time{font-size:11px!important}
+}
