@@ -1842,3 +1842,22 @@ main:has(#production:not(.hidden)){max-width:1240px!important}
   .production-transaction-title{font-size:15px!important}
   .production-transaction-time{font-size:11px!important}
 }
+
+/* V3.49 今日 / 歷史扣庫存紀錄分流 */
+.production-transaction-today-head{align-items:center!important}
+.production-transaction-today-head>div:first-child{display:grid;gap:3px}
+.production-transaction-history-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.production-transaction-today-count{display:inline-flex!important;align-items:center;padding:7px 11px;border-radius:999px;background:#eef7f2;color:#47705f!important;font-size:12px!important;font-weight:900!important;white-space:nowrap}
+.production-history-toggle-btn{min-height:36px!important;padding:7px 13px!important;border-radius:12px!important;font-size:12px!important;white-space:nowrap}
+.production-history-panel{margin-top:16px;padding-top:16px;border-top:1px solid #e4ece9}
+.production-history-panel.hidden{display:none!important}
+.production-history-panel-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:10px}
+.production-history-panel-head strong{font-size:14px;font-weight:900;color:#36575b}
+.production-history-panel-head span{font-size:11px;font-weight:700;color:#8a999b}
+.production-transaction-empty-today{padding:18px 20px;border:1px dashed #d5dfdc;border-radius:16px;color:#89999b;font-weight:700;text-align:center;background:#fbfcfc}
+@media (max-width:760px){
+  .production-transaction-today-head{display:grid!important;gap:10px!important}
+  .production-transaction-history-tools{justify-content:space-between;width:100%;gap:8px}
+  .production-history-toggle-btn{flex:1;max-width:220px}
+  .production-history-panel-head{display:grid;gap:2px}
+}
