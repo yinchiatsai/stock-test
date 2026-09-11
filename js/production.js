@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.46 production analyzer; mapping status is derived from the same stockDetails used by the deduction plan, so remembered mappings and preview stay in sync.
+  // V3.47 production analyzer; deduction transaction history uses collapsible cards with mobile-first compact display.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1918,6 +1918,7 @@
       return;
     }
 
+    const compactOnMobile = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
     const cards = txs.map((tx, index) => {
       const txItems = Array.isArray(tx.items) ? tx.items : [];
       const totalQty = txItems.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
@@ -1929,30 +1930,36 @@
           <strong class="production-transaction-item-qty">−${escapeHtml(Number(row.quantity) || 0)}</strong>
         </div>`).join("");
       const reverted = tx.status === "reverted";
+      const shouldOpen = !compactOnMobile && index === 0;
       return `
-        <section class="production-transaction-card ${reverted ? "is-reverted" : "is-active"}" data-transaction-id="${escapeHtml(tx.id)}">
-          <div class="production-transaction-head">
-            <div class="production-transaction-heading">
-              <span class="production-transaction-check" aria-hidden="true">${reverted ? "↩" : "✓"}</span>
-              <div>
-                <strong class="production-transaction-title">${reverted ? "此筆扣庫存已復原" : "扣庫存完成"}</strong>
-                <span class="production-transaction-time">${escapeHtml(reverted ? (tx.revertedAtText || tx.createdAtText || "") : (tx.createdAtText || ""))}</span>
+        <details class="production-transaction-card ${reverted ? "is-reverted" : "is-active"}" data-transaction-id="${escapeHtml(tx.id)}" ${shouldOpen ? "open" : ""}>
+          <summary class="production-transaction-summary-row">
+            <div class="production-transaction-head">
+              <div class="production-transaction-heading">
+                <span class="production-transaction-check" aria-hidden="true">${reverted ? "↩" : "✓"}</span>
+                <div>
+                  <strong class="production-transaction-title">${reverted ? "此筆扣庫存已復原" : "扣庫存完成"}</strong>
+                  <span class="production-transaction-time">${escapeHtml(reverted ? (tx.revertedAtText || tx.createdAtText || "") : (tx.createdAtText || ""))}</span>
+                </div>
               </div>
+              <div class="production-transaction-metrics">
+                <div class="production-transaction-metric"><span>本次上傳</span><strong>${escapeHtml(folderText)}</strong></div>
+                <div class="production-transaction-metric"><span>庫存品項</span><strong>${txItems.length}</strong></div>
+                <div class="production-transaction-metric"><span>共扣除</span><strong>${totalQty}<small> 件</small></strong></div>
+              </div>
+              <span class="production-transaction-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><b>⌄</b></span>
             </div>
-            <div class="production-transaction-metrics">
-              <div class="production-transaction-metric"><span>本次上傳</span><strong>${escapeHtml(folderText)}</strong></div>
-              <div class="production-transaction-metric"><span>庫存品項</span><strong>${txItems.length}</strong></div>
-              <div class="production-transaction-metric"><span>共扣除</span><strong>${totalQty}<small> 件</small></strong></div>
-            </div>
+          </summary>
+          <div class="production-transaction-body">
+            <div class="production-transaction-divider"></div>
+            <div class="production-transaction-items">${itemRows}</div>
+            ${reverted ? "" : `
+              <div class="production-transaction-actions">
+                <span class="production-transaction-action-note">每一次確認扣庫存都是獨立交易，可單獨復原。</span>
+                <button type="button" class="secondary production-undo-deduct-btn" data-transaction-id="${escapeHtml(tx.id)}">復原此筆扣庫存</button>
+              </div>`}
           </div>
-          <div class="production-transaction-divider"></div>
-          <div class="production-transaction-items">${itemRows}</div>
-          ${reverted ? "" : `
-            <div class="production-transaction-actions">
-              <span class="production-transaction-action-note">每一次確認扣庫存都是獨立交易，可單獨復原。</span>
-              <button type="button" class="secondary production-undo-deduct-btn" data-transaction-id="${escapeHtml(tx.id)}">復原此筆扣庫存</button>
-            </div>`}
-        </section>`;
+        </details>`;
     }).join("");
 
     box.className = "production-transaction-status production-transaction-history";
@@ -2818,7 +2825,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.46 對應狀態與扣存預覽同步";
+      el.textContent = "V3.47 扣庫存紀錄收合卡片";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
