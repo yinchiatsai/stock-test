@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.47 production analyzer; deduction transaction history uses collapsible cards with mobile-first compact display.
+  // V3.48 production analyzer; inventory mapping status now reads the same formal inventory source as deduction planning.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -2514,6 +2514,19 @@
 
   function getInventoryProductOptions() {
     try {
+      // V3.48：對應狀態、商品選擇器與實際扣庫存必須共用正式庫存來源 data.items。
+      // 先讀 data.items，避免 gbSortedActiveItems 在部分頁面載入順序下拿到空清單，
+      // 造成「準備扣庫存有資料，但上方仍顯示尚未對應」的矛盾。
+      if (typeof data !== "undefined" && Array.isArray(data.items)) {
+        return data.items
+          .filter(item => item && !item.disabled && String(item.name || "").trim())
+          .map(item => item.name.trim());
+      }
+      if (window.data && Array.isArray(window.data.items)) {
+        return window.data.items
+          .filter(item => item && !item.disabled && String(item.name || "").trim())
+          .map(item => item.name.trim());
+      }
       if (typeof window.gbSortedActiveItems === "function") return window.gbSortedActiveItems().map(item => item.name).filter(Boolean);
       if (typeof gbSortedActiveItems === "function") return gbSortedActiveItems().map(item => item.name).filter(Boolean);
     } catch (error) {
@@ -2825,7 +2838,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.47 扣庫存紀錄收合卡片";
+      el.textContent = "V3.48 對應狀態正式庫存來源修正";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
