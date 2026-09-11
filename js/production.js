@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.48 production analyzer; inventory mapping status now reads the same formal inventory source as deduction planning.
+  // V3.50 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1902,77 +1902,198 @@
     return txs.find(tx => tx.status === "active" || tx.status === "reverted") || null;
   }
 
-  function recentProductionTransactions(limit = 10) {
+
+  // V3.50：一次「確認扣庫存」完成後，該批分析資料就離開目前工作區。
+  // 交易本身仍保留在 productionTransactions；復原只加回庫存，不把舊分析資料塞回工作區。
+  function sourceKeyForProductionRecord(record) {
+    return String(record?.sourceSignature || record?.path || record?.filename || "");
+  }
+
+  function rootFolderForProductionRecord(record) {
+    const parts = splitPath(record?.path || record?.filename || "");
+    return parts.length > 1 ? parts[0] : "";
+  }
+
+  function workspaceSourceKeysForTransaction(sourceKeys = []) {
+    const directKeys = new Set((sourceKeys || []).map(value => String(value || "")).filter(Boolean));
+    const participatingFolders = new Set();
+    (currentSession.records || []).forEach(record => {
+      if (!directKeys.has(sourceKeyForProductionRecord(record))) return;
+      const folder = rootFolderForProductionRecord(record);
+      if (folder) participatingFolders.add(folder);
+    });
+
+    const keys = new Set();
+    (currentSession.records || []).forEach(record => {
+      const key = sourceKeyForProductionRecord(record);
+      const folder = rootFolderForProductionRecord(record);
+      if (directKeys.has(key) || (folder && participatingFolders.has(folder))) keys.add(key);
+    });
+    return Array.from(keys);
+  }
+
+  function refreshCurrentSessionMetadata() {
+    currentSession.label = inferSessionLabel(currentSession.records || [], "目前工作階段");
+    currentSession.updatedAt = new Date().toLocaleString("zh-TW", { hour12: false });
+    const sessionKeys = new Set((currentSession.records || []).map(recordSessionKey));
+    currentSession.sources = Array.from(sessionKeys).map(key => {
+      const [date, process] = key.split("|");
+      return {
+        key,
+        date,
+        process,
+        count: currentSession.records.filter(record => recordSessionKey(record) === key).length,
+        updatedAt: currentSession.updatedAt
+      };
+    });
+  }
+
+  function completeProductionWorkspaceForTransaction(tx) {
+    const completedKeys = new Set((tx?.workspaceSourceKeys || tx?.sourceKeys || []).map(value => String(value || "")).filter(Boolean));
+    if (!completedKeys.size) return;
+
+    currentSession.records = (currentSession.records || []).filter(record => !completedKeys.has(sourceKeyForProductionRecord(record)));
+    droppedProductionEntries = (droppedProductionEntries || []).filter(entry => !completedKeys.has(productionEntryKey(entry)));
+    completedKeys.forEach(key => analyzedDroppedEntryKeys.delete(key));
+
+    // 沒有任何檔案留在某批次時，也清掉該批次的重複加入提示。
+    const remainingBatchKeys = new Set((droppedProductionEntries || []).map(entry => productionBatchInfo(entry).key));
+    Array.from(droppedBatchDuplicateCounts.keys()).forEach(key => { if (!remainingBatchKeys.has(key)) droppedBatchDuplicateCounts.delete(key); });
+    Array.from(droppedBatchLastAddedAt.keys()).forEach(key => { if (!remainingBatchKeys.has(key)) droppedBatchLastAddedAt.delete(key); });
+
+    lastProductChanges = new Map();
+    refreshCurrentSessionMetadata();
+    lastAnalysis = currentSession.records.length ? aggregateAnalysisFromRecords(currentSession.records, currentSession.label) : null;
+
+    renderDroppedFolderSummary();
+    renderSessionPanel();
+    if (lastAnalysis) {
+      lastAnalysis.mode = "session";
+      lastAnalysis.filteredCount = currentSession.records.length;
+      lastAnalysis.rawCount = currentSession.records.length;
+      renderAnalysis(lastAnalysis);
+    } else {
+      $("productionSummaryCards").innerHTML = '<div class="production-summary-empty">尚未分析</div>';
+      ["productionProductResult", "productionSourceResult", "productionTagResult", "productionProcessResult", "productionDetailResult", "productionIssueActionResult", "productionIssueInfoResult"].forEach(id => {
+        const el = $(id);
+        if (el) el.textContent = "尚未分析";
+      });
+      const exportBtn = $("productionExportCsvBtn");
+      if (exportBtn) exportBtn.disabled = true;
+      setProductionFlowState(null);
+      renderDeductPreview(null);
+    }
+  }
+
+  function productionLocalDateKey(timestamp) {
+    const date = new Date(Number(timestamp || 0));
+    if (Number.isNaN(date.getTime())) return "";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function recentProductionTransactions(limit = 300) {
     return getProductionTransactions()
       .filter(tx => tx && (tx.status === "active" || tx.status === "reverted"))
       .slice(0, limit);
   }
 
+  function productionTransactionCardHtml(tx, index, compactOnMobile, forceClosed = false) {
+    const txItems = Array.isArray(tx.items) ? tx.items : [];
+    const totalQty = txItems.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+    const folderNames = Array.isArray(tx.folders) ? tx.folders.filter(Boolean) : [];
+    const folderText = folderNames.length ? `${folderNames.length} 個資料夾` : `${(tx.sourceKeys || []).length} 個來源檔`;
+    const itemRows = txItems.map(row => `
+      <div class="production-transaction-item-row">
+        <span class="production-transaction-item-name">${escapeHtml(row.itemName || "未命名品項")}</span>
+        <strong class="production-transaction-item-qty">−${escapeHtml(Number(row.quantity) || 0)}</strong>
+      </div>`).join("");
+    const reverted = tx.status === "reverted";
+    const shouldOpen = !forceClosed && !compactOnMobile && index === 0;
+    return `
+      <details class="production-transaction-card ${reverted ? "is-reverted" : "is-active"}" data-transaction-id="${escapeHtml(tx.id)}" ${shouldOpen ? "open" : ""}>
+        <summary class="production-transaction-summary-row">
+          <div class="production-transaction-head">
+            <div class="production-transaction-heading">
+              <span class="production-transaction-check" aria-hidden="true">${reverted ? "↩" : "✓"}</span>
+              <div>
+                <strong class="production-transaction-title">${reverted ? "此筆扣庫存已復原" : "扣庫存完成"}</strong>
+                <span class="production-transaction-time">${escapeHtml(reverted ? (tx.revertedAtText || tx.createdAtText || "") : (tx.createdAtText || ""))}</span>
+              </div>
+            </div>
+            <div class="production-transaction-metrics">
+              <div class="production-transaction-metric"><span>本次上傳</span><strong>${escapeHtml(folderText)}</strong></div>
+              <div class="production-transaction-metric"><span>庫存品項</span><strong>${txItems.length}</strong></div>
+              <div class="production-transaction-metric"><span>共扣除</span><strong>${totalQty}<small> 件</small></strong></div>
+            </div>
+            <span class="production-transaction-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><b>⌄</b></span>
+          </div>
+        </summary>
+        <div class="production-transaction-body">
+          <div class="production-transaction-divider"></div>
+          <div class="production-transaction-items">${itemRows}</div>
+          ${reverted ? "" : `
+            <div class="production-transaction-actions">
+              <span class="production-transaction-action-note">每一次確認扣庫存都是獨立交易，可單獨復原。</span>
+              <button type="button" class="secondary production-undo-deduct-btn" data-transaction-id="${escapeHtml(tx.id)}">復原此筆扣庫存</button>
+            </div>`}
+        </div>
+      </details>`;
+  }
+
   function renderProductionTransactionStatus() {
     const box = $("productionDeductTransaction");
     if (!box) return;
-    const txs = recentProductionTransactions(10);
+    const txs = recentProductionTransactions(300);
     if (!txs.length) {
       box.className = "production-transaction-status hidden";
       box.innerHTML = "";
       return;
     }
 
+    const todayKey = productionLocalDateKey(Date.now());
+    const todayTxs = txs.filter(tx => productionLocalDateKey(tx.createdAt) === todayKey);
+    const historyTxs = txs.filter(tx => productionLocalDateKey(tx.createdAt) !== todayKey);
     const compactOnMobile = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
-    const cards = txs.map((tx, index) => {
-      const txItems = Array.isArray(tx.items) ? tx.items : [];
-      const totalQty = txItems.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
-      const folderNames = Array.isArray(tx.folders) ? tx.folders.filter(Boolean) : [];
-      const folderText = folderNames.length ? `${folderNames.length} 個資料夾` : `${(tx.sourceKeys || []).length} 個來源檔`;
-      const itemRows = txItems.map(row => `
-        <div class="production-transaction-item-row">
-          <span class="production-transaction-item-name">${escapeHtml(row.itemName || "未命名品項")}</span>
-          <strong class="production-transaction-item-qty">−${escapeHtml(Number(row.quantity) || 0)}</strong>
-        </div>`).join("");
-      const reverted = tx.status === "reverted";
-      const shouldOpen = !compactOnMobile && index === 0;
-      return `
-        <details class="production-transaction-card ${reverted ? "is-reverted" : "is-active"}" data-transaction-id="${escapeHtml(tx.id)}" ${shouldOpen ? "open" : ""}>
-          <summary class="production-transaction-summary-row">
-            <div class="production-transaction-head">
-              <div class="production-transaction-heading">
-                <span class="production-transaction-check" aria-hidden="true">${reverted ? "↩" : "✓"}</span>
-                <div>
-                  <strong class="production-transaction-title">${reverted ? "此筆扣庫存已復原" : "扣庫存完成"}</strong>
-                  <span class="production-transaction-time">${escapeHtml(reverted ? (tx.revertedAtText || tx.createdAtText || "") : (tx.createdAtText || ""))}</span>
-                </div>
-              </div>
-              <div class="production-transaction-metrics">
-                <div class="production-transaction-metric"><span>本次上傳</span><strong>${escapeHtml(folderText)}</strong></div>
-                <div class="production-transaction-metric"><span>庫存品項</span><strong>${txItems.length}</strong></div>
-                <div class="production-transaction-metric"><span>共扣除</span><strong>${totalQty}<small> 件</small></strong></div>
-              </div>
-              <span class="production-transaction-toggle" aria-hidden="true"><span class="when-closed">展開</span><span class="when-open">收合</span><b>⌄</b></span>
-            </div>
-          </summary>
-          <div class="production-transaction-body">
-            <div class="production-transaction-divider"></div>
-            <div class="production-transaction-items">${itemRows}</div>
-            ${reverted ? "" : `
-              <div class="production-transaction-actions">
-                <span class="production-transaction-action-note">每一次確認扣庫存都是獨立交易，可單獨復原。</span>
-                <button type="button" class="secondary production-undo-deduct-btn" data-transaction-id="${escapeHtml(tx.id)}">復原此筆扣庫存</button>
-              </div>`}
-          </div>
-        </details>`;
-    }).join("");
+    const todayCards = todayTxs.map((tx, index) => productionTransactionCardHtml(tx, index, compactOnMobile, false)).join("");
+    const historyCards = historyTxs.map((tx, index) => productionTransactionCardHtml(tx, index, true, true)).join("");
 
     box.className = "production-transaction-status production-transaction-history";
     box.innerHTML = `
-      <div class="production-transaction-history-head">
-        <strong>最近扣庫存紀錄</strong>
-        <span>每按一次「確認扣庫存」會建立一筆獨立紀錄</span>
+      <div class="production-transaction-history-head production-transaction-today-head">
+        <div>
+          <strong>今日扣庫存紀錄</strong>
+          <span>今天每按一次「確認扣庫存」會建立一筆獨立紀錄</span>
+        </div>
+        <div class="production-transaction-history-tools">
+          <span class="production-transaction-today-count">今日 ${todayTxs.length} 筆</span>
+          ${historyTxs.length ? `<button type="button" class="secondary production-history-toggle-btn" aria-expanded="false">查看歷史紀錄（${historyTxs.length}）</button>` : ""}
+        </div>
       </div>
-      <div class="production-transaction-history-list">${cards}</div>`;
+      <div class="production-transaction-history-list production-today-list">
+        ${todayCards || `<div class="production-transaction-empty-today">今天尚無扣庫存紀錄。</div>`}
+      </div>
+      ${historyTxs.length ? `
+        <div class="production-history-panel hidden">
+          <div class="production-history-panel-head"><strong>歷史扣庫存紀錄</strong><span>僅供查詢，紀錄不會因換日而刪除</span></div>
+          <div class="production-transaction-history-list">${historyCards}</div>
+        </div>` : ""}`;
 
     box.querySelectorAll(".production-undo-deduct-btn").forEach(button => {
       button.addEventListener("click", () => undoProductionDeduction(button.dataset.transactionId));
     });
+    const historyButton = box.querySelector(".production-history-toggle-btn");
+    const historyPanel = box.querySelector(".production-history-panel");
+    if (historyButton && historyPanel) {
+      historyButton.addEventListener("click", () => {
+        const willOpen = historyPanel.classList.contains("hidden");
+        historyPanel.classList.toggle("hidden", !willOpen);
+        historyButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        historyButton.textContent = willOpen ? "收合歷史紀錄" : `查看歷史紀錄（${historyTxs.length}）`;
+      });
+    }
   }
 
   function renderDeductPreview(analysis) {
@@ -2083,6 +2204,7 @@
         user: currentUserLabelForProduction(),
         email: currentUserEmailForProduction(),
         sourceKeys: plan.sourceKeys,
+        workspaceSourceKeys: workspaceSourceKeysForTransaction(plan.sourceKeys),
         folders: Array.from(new Set((lastAnalysis.records || [])
           .filter(r => deductedSourceKeysForTx.has(String(r.sourceSignature || r.path || r.filename || "")))
           .map(r => splitPath(r.path || r.filename)[0])
@@ -2102,10 +2224,8 @@
       });
       saveData();
       if (typeof renderAll === "function") renderAll();
-      renderSessionPanel();
-      renderDeductPreview(lastAnalysis);
-      setProductionFlowState(lastAnalysis);
-      updateProductionStatus(`已扣除 ${plan.rows.length} 個庫存品項，共 ${totalQty} 件。`, "done");
+      completeProductionWorkspaceForTransaction(tx);
+      updateProductionStatus(`已扣除 ${plan.rows.length} 個庫存品項，共 ${totalQty} 件；本次分析資料已移入扣庫存紀錄。`, "done");
     } catch (error) {
       console.error(error);
       updateProductionStatus(`扣庫存失敗：${error.message || error}`, "error");
@@ -2132,13 +2252,12 @@
       tx.revertedAtText = new Date(tx.revertedAt).toLocaleString("zh-TW", { hour12: false });
       tx.revertedBy = currentUserLabelForProduction();
       tx.revertedEmail = currentUserEmailForProduction();
-      currentSession.records.forEach(record => { if (record.deductedTransactionId === tx.id) record.deductedTransactionId = ""; });
       saveData();
       if (typeof renderAll === "function") renderAll();
       renderSessionPanel();
       renderDeductPreview(lastAnalysis);
       setProductionFlowState(lastAnalysis);
-      updateProductionStatus("已復原此次扣庫存，庫存數量已加回。", "done");
+      updateProductionStatus("已復原此筆扣庫存，庫存數量已加回；舊分析資料不會重新回到目前工作區。", "done");
     } catch (error) {
       console.error(error);
       updateProductionStatus(`復原失敗：${error.message || error}`, "error");
@@ -2514,7 +2633,7 @@
 
   function getInventoryProductOptions() {
     try {
-      // V3.48：對應狀態、商品選擇器與實際扣庫存必須共用正式庫存來源 data.items。
+      // V3.49：對應狀態、商品選擇器與實際扣庫存必須共用正式庫存來源 data.items。
       // 先讀 data.items，避免 gbSortedActiveItems 在部分頁面載入順序下拿到空清單，
       // 造成「準備扣庫存有資料，但上方仍顯示尚未對應」的矛盾。
       if (typeof data !== "undefined" && Array.isArray(data.items)) {
@@ -2838,7 +2957,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.48 對應狀態正式庫存來源修正";
+      el.textContent = "V3.50 扣庫存後工作區自動結案";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
