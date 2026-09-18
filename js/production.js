@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.50 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
+  // V3.51 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -268,6 +268,26 @@
       }
     }
     const issues = [];
+
+    // V3.51：僅辨識明確寫在第二段的「單面xN / 雙面xN」為商品數量。
+    // 例如：麻布袋(大)_雙面x2_客人 → 2 件。
+    // 注意：此規則不處理「正/背/反」成組製作檔，因此既有正背合併仍維持 1 組 = 1 件。
+    if (rawParts.length >= 2) {
+      const faceQty = rawParts[1].match(/^(單面|双面|雙面)\s*[xX×]\s*(\d+)$/);
+      if (faceQty) {
+        const productText = rawParts[0].trim();
+        const productGroups = parseParenGroups(productText);
+        const colors = colorsFromLastMeaningfulGroup(productText, productGroups, productGroups.length - 1);
+        return {
+          product: cleanProduct(productText),
+          quantity: Number(faceQty[2]),
+          unitHint: "件",
+          colors,
+          qtyMode: "face-explicit-qty",
+          issues
+        };
+      }
+    }
 
     // 支援括號內直接寫「銀_玫瑰各x1」：各xN 套用到前面所有顏色。
     // 例如：軍牌(單)(銀_玫瑰各x1)_客人 → 銀x1 + 玫瑰x1。
@@ -1705,6 +1725,7 @@
                 <div class="production-side-meta">${escapeHtml(productVariantFromRecord(r, productName) ? `規格：${productVariantFromRecord(r, productName)}｜` : "")}${escapeHtml(r.source || "")}｜${escapeHtml(r.process || "")}${mergeText ? `｜${escapeHtml(mergeText)}` : ""}</div>
               </div>
               <div class="production-inline-source-actions">
+                ${isCounted ? `<button type="button" class="secondary small production-record-qty-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">修改數量</button>` : ""}
                 ${isCounted && !isStatsOnlyRecord(r, productName) ? `<button type="button" class="secondary small production-record-product-btn" data-path="${escapeHtml(r.path)}" data-file="${escapeHtml(r.filename)}">修改對應</button>` : ""}
                 <button type="button" class="secondary small danger-text production-record-remove-btn" data-key="${escapeHtml(r.path || r.filename)}">移除</button>
               </div>
@@ -1903,7 +1924,7 @@
   }
 
 
-  // V3.50：一次「確認扣庫存」完成後，該批分析資料就離開目前工作區。
+  // V3.51：一次「確認扣庫存」完成後，該批分析資料就離開目前工作區。
   // 交易本身仍保留在 productionTransactions；復原只加回庫存，不把舊分析資料塞回工作區。
   function sourceKeyForProductionRecord(record) {
     return String(record?.sourceSignature || record?.path || record?.filename || "");
@@ -2863,6 +2884,37 @@ ${record.filename}
       removeProductionRecord(removeBtn.dataset.key || "");
       return;
     }
+    const qtyBtn = event.target.closest(".production-record-qty-btn");
+    if (qtyBtn) {
+      const record = findRecordByKey(qtyBtn.dataset.path || "", qtyBtn.dataset.file || "");
+      if (!record) return;
+      const oldQty = Math.max(1, Number(record.countedQuantity || record.quantity || 1));
+      const input = window.prompt(`請輸入「${record.filename || record.product}」實際計入數量：`, String(oldQty));
+      if (input === null) return;
+      const newQty = Number(String(input).trim());
+      if (!Number.isInteger(newQty) || newQty <= 0) {
+        updateProductionStatus("修改失敗：數量必須是大於 0 的整數。", "error");
+        return;
+      }
+      // 只修改此來源檔。若已有庫存對應，依原比例同步調整扣存數量；不建立全域解析規則。
+      const ratio = newQty / oldQty;
+      record.quantity = newQty;
+      record.countedQuantity = newQty;
+      record.manualQuantity = true;
+      if (Array.isArray(record.stockDetails) && record.stockDetails.length) {
+        record.stockDetails = record.stockDetails.map(d => ({
+          ...d,
+          quantity: Math.max(1, Math.round(Number(d.quantity || 0) * ratio)),
+          note: d.note || "手動修正數量"
+        }));
+      } else {
+        rebuildStockDetailsForRecord(record);
+      }
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderAnalysis(lastAnalysis);
+      updateProductionStatus(`已將此來源檔計入數量改為 ${newQty} 件。`, "done");
+      return;
+    }
     const btn = event.target.closest(".production-record-product-btn");
     if (!btn) return;
     const path = btn.dataset.path || "";
@@ -2957,7 +3009,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.50 扣庫存後工作區自動結案";
+      el.textContent = "V3.51 扣庫存後工作區自動結案";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -3076,7 +3128,7 @@ ${record.filename}
     $("productionIssuePanel")?.addEventListener("click", handleIssueAction);
     $("productionSessionList")?.addEventListener("click", handleSessionAction);
     $("productionProductResult")?.addEventListener("click", event => {
-      if (event.target.closest(".production-record-remove-btn, .production-record-product-btn")) {
+      if (event.target.closest(".production-record-remove-btn, .production-record-product-btn, .production-record-qty-btn")) {
         handleRecordProductAction(event);
         return;
       }
