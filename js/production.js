@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.51 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
+  // V3.52 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -269,7 +269,7 @@
     }
     const issues = [];
 
-    // V3.51：僅辨識明確寫在第二段的「單面xN / 雙面xN」為商品數量。
+    // V3.52：僅辨識明確寫在第二段的「單面xN / 雙面xN」為商品數量。
     // 例如：麻布袋(大)_雙面x2_客人 → 2 件。
     // 注意：此規則不處理「正/背/反」成組製作檔，因此既有正背合併仍維持 1 組 = 1 件。
     if (rawParts.length >= 2) {
@@ -1282,6 +1282,10 @@
     const list = Array.isArray(record?.issues) ? record.issues : [];
     if (!list.length) return [];
 
+    // V3.52：使用者已明確指定「這個商品不扣庫存」後，該來源檔不應再以解析警告阻擋扣庫存。
+    // 這個選擇代表此檔已人工確認不參與庫存扣減，因此包含「數量無法判斷／未解析商品」等警告都視為已處理。
+    if (isStatsOnlyRecord(record, record.product || '')) return [];
+
     // 「分析結果」處理的是庫存對應；「解析警告」只保留仍未解決的檔名解析問題。
     // 若使用者已經替未解析商品指定完成庫存，原本的「缺少/無法判斷商品」就視為已解決，
     // 不應在下方再要求處理一次。其他像未知標記、數量格式等警告仍保留。
@@ -1924,7 +1928,7 @@
   }
 
 
-  // V3.51：一次「確認扣庫存」完成後，該批分析資料就離開目前工作區。
+  // V3.52：一次「確認扣庫存」完成後，該批分析資料就離開目前工作區。
   // 交易本身仍保留在 productionTransactions；復原只加回庫存，不把舊分析資料塞回工作區。
   function sourceKeyForProductionRecord(record) {
     return String(record?.sourceSignature || record?.path || record?.filename || "");
@@ -3009,7 +3013,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.51 扣庫存後工作區自動結案";
+      el.textContent = "V3.52 扣庫存後工作區自動結案";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
