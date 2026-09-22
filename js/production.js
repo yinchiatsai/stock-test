@@ -205,12 +205,43 @@
     return groups;
   }
 
+  function splitKnownColorSequence(text) {
+    const value = String(text || "").trim();
+    if (!value) return [];
+    if (KNOWN_COLORS.includes(value)) return [value];
+    const colors = [...KNOWN_COLORS].sort((a, b) => b.length - a.length);
+    const memo = new Map();
+    const walk = (rest) => {
+      if (!rest) return [];
+      if (memo.has(rest)) return memo.get(rest);
+      for (const color of colors) {
+        if (!rest.startsWith(color)) continue;
+        const tail = walk(rest.slice(color.length));
+        if (tail) {
+          const result = [color, ...tail];
+          memo.set(rest, result);
+          return result;
+        }
+      }
+      memo.set(rest, null);
+      return null;
+    };
+    return walk(value) || [];
+  }
+
   function parseColorList(text) {
     const normalized = String(text || "")
       .replace(/、/g, ",")
       .replace(/，/g, ",")
       .replace(/[＿_]/g, ",");
-    return normalized.split(",").map(x => x.trim()).filter(Boolean);
+    const parts = normalized.split(",").map(x => x.trim()).filter(Boolean);
+    // V3.54：若「各xN」前的顏色沒有分隔符，例如「金銀各x1」，
+    // 僅在整段可完整拆成已知顏色時才拆分，避免影響一般商品名稱。
+    if (parts.length === 1 && !KNOWN_COLORS.includes(parts[0])) {
+      const split = splitKnownColorSequence(parts[0]);
+      if (split.length >= 2) return split;
+    }
+    return parts;
   }
 
   function isColorOrProductionAttributeToken(text) {
@@ -3013,7 +3044,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.52 扣庫存後工作區自動結案";
+      el.textContent = "V3.54 多色各x數量解析修正";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
