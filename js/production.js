@@ -350,6 +350,36 @@
     const groups = parseParenGroups(text);
     const last = groups[groups.length - 1];
 
+    // V3.55：支援連續括號各自帶數量，例如：極細筆(雙)(銀x9)(玫瑰金x3)。
+    // 只有括號內容能完整辨識為「已知顏色 + x正整數」時才套用，避免影響 (32G)、(大)、(雙) 等既有規格。
+    const inlineColorQtyGroups = groups.map(group => {
+      const m = String(group.text || "").match(/^(.+?)\s*[xX×]\s*(\d+)$/);
+      if (!m) return null;
+      const color = m[1].trim();
+      if (!KNOWN_COLORS.includes(color)) return null;
+      const quantity = Number(m[2]);
+      if (!Number.isInteger(quantity) || quantity <= 0) return null;
+      return { group, color, quantity };
+    }).filter(Boolean);
+    if (inlineColorQtyGroups.length) {
+      const firstQtyGroup = inlineColorQtyGroups[0].group;
+      // 從第一個顏色數量括號開始，後續括號若有非顏色數量內容則不套用此規則，避免誤吃客製規格。
+      const trailingGroups = groups.filter(group => group.start >= firstQtyGroup.start);
+      const allTrailingAreColorQty = trailingGroups.every(group => inlineColorQtyGroups.some(item => item.group.start === group.start));
+      if (allTrailingAreColorQty) {
+        const variantDetails = inlineColorQtyGroups.map(item => ({ name: item.color, quantity: item.quantity }));
+        return {
+          product: cleanProduct(text.slice(0, firstQtyGroup.start).trim()),
+          quantity: variantDetails.reduce((sum, item) => sum + item.quantity, 0),
+          unitHint: "件",
+          colors: variantDetails.map(item => item.name),
+          variantDetails,
+          qtyMode: "separate-color-qty-groups",
+          issues
+        };
+      }
+    }
+
     // 多色，每色同數量：軍牌(單)(金,銀,玫瑰,黑)(各x20)
     if (last) {
       const sameQty = last.text.match(/^各\s*[xX×]\s*(\d+)$/);
@@ -1829,6 +1859,9 @@
     if (/缺少商品|無法判斷商品/.test(issueText) || record.product === "未解析") {
       buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="manual-product" data-file="${escapeHtml(record.filename)}">指定商品</button>`);
     }
+    if (/數量格式|數量無法判斷/.test(issueText)) {
+      buttons.push(`<button type="button" class="secondary small production-rule-btn" data-action="manual-quantity" data-file="${escapeHtml(record.filename)}">修改數量</button>`);
+    }
     if (/舊式尾端數量/.test(issueText)) {
       buttons.push(`<span class="production-info-no-action">已計入，不需操作</span>`);
     }
@@ -2936,6 +2969,7 @@ ${record.filename}
       record.quantity = newQty;
       record.countedQuantity = newQty;
       record.manualQuantity = true;
+      record.issues = (record.issues || []).filter(issue => !/數量格式|數量無法判斷/.test(issue));
       if (Array.isArray(record.stockDetails) && record.stockDetails.length) {
         record.stockDetails = record.stockDetails.map(d => ({
           ...d,
@@ -2994,6 +3028,28 @@ ${record.filename}
       if (record) openProductionProductPicker(record);
       return;
     }
+    if (action === "manual-quantity" && file) {
+      const record = currentSession.records.find(r => r.filename === file || r.path === file);
+      if (!record) return;
+      const oldQty = Math.max(1, Number(record.countedQuantity || record.quantity || 1));
+      const input = window.prompt(`請輸入「${record.filename || record.product}」實際計入數量：`, String(oldQty));
+      if (input === null) return;
+      const newQty = Number(String(input).trim());
+      if (!Number.isInteger(newQty) || newQty <= 0) {
+        updateProductionStatus("修改失敗：數量必須是大於 0 的整數。", "error");
+        return;
+      }
+      record.quantity = newQty;
+      record.countedQuantity = newQty;
+      record.manualQuantity = true;
+      // 人工確認數量後，解除會阻擋扣庫存的數量解析警告；其他警告仍保留。
+      record.issues = (record.issues || []).filter(issue => !/數量格式|數量無法判斷/.test(issue));
+      rebuildStockDetailsForRecord(record);
+      lastAnalysis = aggregateAnalysisFromRecords(currentSession.records, currentSession.label);
+      renderAnalysis(lastAnalysis);
+      updateProductionStatus(`已將此來源檔實際計入數量改為 ${newQty} 件，數量警告已解除。`, "done");
+      return;
+    }
     if (action === "ignore-warning" && file) {
       const issue = btn.dataset.issue || "";
       if (issue) runtimeRules.ignoredIssues = Array.from(new Set([...(runtimeRules.ignoredIssues || []), issueKey(file, issue)]));
@@ -3044,7 +3100,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.54 多色各x數量解析修正";
+      el.textContent = "V3.55 多色獨立數量與警告可處理修正";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
