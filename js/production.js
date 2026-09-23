@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.52 production analyzer; completed deductions leave the active analysis workspace while transaction history remains reversible.
+  // V3.56 production analyzer; process-first batch tracking + persistent production batch history.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -1000,6 +1000,7 @@
       filename,
       path: entry.path || filename,
       sourceSignature: entry.sourceSignature || `${actualDate}|${filename}`,
+      productionBatchId: entry.productionBatchId || "",
       folderPriority: !!folderCandidate,
       folderName: folderCandidate ? folderCandidate.folder : "",
       unknownStartTokens: parsed.unknownStartTokens || [],
@@ -1020,6 +1021,88 @@
     return record;
   }
 
+  function selectedProductionProcess() {
+    return String($("productionProcessQuickSelect")?.value || $("productionProcessInput")?.value || "").trim();
+  }
+
+  function productionBatchHistoryRows() {
+    try {
+      if (typeof data === "undefined") return [];
+      data.productionBatchHistory = Array.isArray(data.productionBatchHistory) ? data.productionBatchHistory : [];
+      return data.productionBatchHistory;
+    } catch (error) { return []; }
+  }
+
+  function simpleBatchFingerprint(entries = [], process = "") {
+    const text = `${process}|` + entries.map(e => productionEntryKey(e)).sort().join("|");
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    return `B${(hash >>> 0).toString(16)}-${entries.length}`;
+  }
+
+  function registerProductionBatches(entries = [], process = "") {
+    const groups = new Map();
+    entries.forEach(entry => {
+      const parts = splitPath(entry.path || entry.filename || "");
+      const folder = parts.length > 1 ? parts[0] : "單一檔案";
+      if (!groups.has(folder)) groups.set(folder, []);
+      groups.get(folder).push(entry);
+    });
+    const history = productionBatchHistoryRows();
+    const now = Date.now();
+    groups.forEach((rows, folder) => {
+      const dateSet = Array.from(new Set(rows.map(e => inferDateFromPath(splitPath(e.path || e.filename || ""))).filter(Boolean)));
+      const date = dateSet.length === 1 ? dateSet[0] : (dateSet.length ? `多日期（${dateSet.length}）` : todayString());
+      const fingerprint = simpleBatchFingerprint(rows, process);
+      let batch = history.find(row => row.fingerprint === fingerprint);
+      if (!batch) {
+        batch = { id:`PB${now}${Math.floor(Math.random()*100000)}`, fingerprint, folder, process:process || "未指定", date, fileCount:rows.length, status:"pending", createdAt:now, updatedAt:now };
+        history.unshift(batch);
+      } else {
+        batch.updatedAt = now;
+        batch.reuploadCount = Number(batch.reuploadCount || 0) + 1;
+      }
+      rows.forEach(entry => { entry.productionBatchId = batch.id; entry.process = process || entry.process || ""; });
+    });
+    data.productionBatchHistory = history.slice(0, 500);
+    try { if (typeof saveData === "function") saveData(); } catch (error) { console.warn(error); }
+    renderProductionBatchHistory();
+  }
+
+  function updateProductionBatchStatus(batchIds = [], status = "analyzed", txId = "") {
+    const ids = new Set((batchIds || []).filter(Boolean));
+    if (!ids.size) return;
+    const now = Date.now();
+    productionBatchHistoryRows().forEach(row => {
+      if (!ids.has(row.id)) return;
+      if (status === "analyzed" && ["deducted","reverted"].includes(row.status)) return;
+      row.status = status;
+      row.updatedAt = now;
+      if (status === "analyzed") row.analyzedAt = now;
+      if (status === "deducted") { row.deductedAt = now; row.transactionId = txId || row.transactionId || ""; }
+      if (status === "reverted") row.revertedAt = now;
+    });
+    try { if (typeof saveData === "function") saveData(); } catch (error) { console.warn(error); }
+    renderProductionBatchHistory();
+  }
+
+  function renderProductionBatchHistory() {
+    const box = $("productionBatchHistory");
+    if (!box) return;
+    const rows = productionBatchHistoryRows().slice().sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0));
+    if (!rows.length) { box.innerHTML = ""; return; }
+    const today = todayString();
+    const recent = rows.slice(0, 40);
+    const statusText = row => row.status === "deducted" ? "✓ 已扣存" : row.status === "reverted" ? "↩ 已復原" : row.status === "analyzed" ? "已分析・待扣存" : "待分析";
+    const cls = row => ["deducted","reverted"].includes(row.status) ? "" : "pending";
+    const html = recent.map(row => {
+      const d = row.date || "無日期"; const p = row.process || "未指定"; const f = row.folder || "資料夾";
+      const when = row.updatedAt ? new Date(row.updatedAt).toLocaleString("zh-TW",{hour12:false}) : "";
+      return `<div class="production-history-batch-row"><div><strong>${escapeHtml(d)}｜${escapeHtml(p)}</strong><small>${escapeHtml(f)}・${escapeHtml(row.fileCount || 0)} 檔${row.reuploadCount ? `・重複加入 ${escapeHtml(row.reuploadCount)} 次` : ""}・${escapeHtml(when)}</small></div><span class="production-history-batch-status ${cls(row)}">${statusText(row)}</span></div>`;
+    }).join("");
+    box.innerHTML = `<details><summary>生產批次紀錄｜最近 ${recent.length} 批（跨日保留）</summary><div class="production-history-batch-list">${html}</div></details>`;
+  }
+
   function entriesFromTextarea() {
     const text = $("productionFilenameInput")?.value || "";
     return text.split(/\r?\n/)
@@ -1033,7 +1116,7 @@
 
   function entriesFromFileInput() {
     const input = $("productionFileInput");
-    const manualProcess = ($("productionProcessInput")?.value || "").trim();
+    const manualProcess = selectedProductionProcess();
     if (!input || !input.files) return [];
     return Array.from(input.files).map(file => {
       const path = file.webkitRelativePath || file.name;
@@ -1060,7 +1143,7 @@
     const parts = splitPath(entry?.path || entry?.filename || "");
     const folder = parts.length > 1 ? parts[0] : "單一檔案";
     const date = inferDateFromPath(parts) || "無日期";
-    const process = inferProcess(parts, date) || "未指定";
+    const process = entry?.process || inferProcess(parts, date) || "未指定";
     // V3.37：使用者實際拖入的最外層資料夾就是一個批次。
     // 子資料夾（日期、製程、OK 等）只作為批次內資訊，不再拆成多批。
     const key = folder;
@@ -2298,6 +2381,7 @@
           .filter(r => deductedSourceKeysForTx.has(String(r.sourceSignature || r.path || r.filename || "")))
           .map(r => splitPath(r.path || r.filename)[0])
           .filter(Boolean))),
+        batchIds: Array.from(new Set((lastAnalysis.records || []).filter(r => deductedSourceKeysForTx.has(String(r.sourceSignature || r.path || r.filename || ""))).map(r => r.productionBatchId).filter(Boolean))),
         items: txItems
       };
       data.productionTransactions = Array.isArray(data.productionTransactions) ? data.productionTransactions : [];
@@ -2311,6 +2395,7 @@
           record.deductedTransactionId = txId;
         }
       });
+      updateProductionBatchStatus(tx.batchIds || [], "deducted", txId);
       saveData();
       if (typeof renderAll === "function") renderAll();
       completeProductionWorkspaceForTransaction(tx);
@@ -2341,6 +2426,7 @@
       tx.revertedAtText = new Date(tx.revertedAt).toLocaleString("zh-TW", { hour12: false });
       tx.revertedBy = currentUserLabelForProduction();
       tx.revertedEmail = currentUserEmailForProduction();
+      updateProductionBatchStatus(tx.batchIds || [], "reverted", tx.id);
       saveData();
       if (typeof renderAll === "function") renderAll();
       renderSessionPanel();
@@ -2582,6 +2668,7 @@
       const key = productionEntryKey(entry);
       if (analyzedNow.has(key)) analyzedDroppedEntryKeys.add(key);
     });
+    updateProductionBatchStatus(Array.from(new Set(entries.map(e => e.productionBatchId).filter(Boolean))), "analyzed");
 
     captureAnalysisChange(previousProductRows, lastAnalysis);
     renderDroppedFolderSummary();
@@ -3145,6 +3232,17 @@ ${record.filename}
     // 因此右側「本次生產資料」看不到批次。現在統一加入、去重、顯示待分析狀態。
     function addEntriesToProductionQueue(incoming, sourceLabel = "資料夾") {
       if (!incoming?.length) return { added: 0, duplicateCount: 0, pending: 0 };
+      const selectedProcess = selectedProductionProcess();
+      const processSelect = $("productionProcessQuickSelect");
+      if (!selectedProcess) {
+        processSelect?.classList.add("production-process-required");
+        updateProductionStatus("請先選擇這批資料的製程，再加入資料夾。", "error");
+        alert("請先選擇製程（雷雕、彩噴、熱轉印…），再加入資料夾。");
+        return { added: 0, duplicateCount: 0, pending: droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry))).length };
+      }
+      processSelect?.classList.remove("production-process-required");
+      incoming.forEach(entry => { entry.process = selectedProcess; });
+      registerProductionBatches(incoming, selectedProcess);
       const existingKeys = new Set(droppedProductionEntries.map(productionEntryKey));
       const incomingUnique = dedupeProductionEntries(incoming);
       const now = new Date().toISOString();
@@ -3210,6 +3308,12 @@ ${record.filename}
     });
 
     renderSessionPanel();
+    renderProductionBatchHistory();
+    $("productionProcessQuickSelect")?.addEventListener("change", event => {
+      event.target.classList.remove("production-process-required");
+      const advanced = $("productionProcessInput");
+      if (advanced) advanced.value = event.target.value || "";
+    });
     setProductionFlowState(lastAnalysis);
     renderDeductPreview(lastAnalysis);
     updateProductionStatus("尚未開始分析。請先加入資料夾，再按「分析新增資料」。", "idle");
