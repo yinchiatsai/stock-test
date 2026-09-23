@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.56 production analyzer; process-first batch tracking + persistent production batch history.
+  // V3.57 production analyzer; removable batches + persistent unfinished workspace + safe page switching.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -18,6 +18,7 @@
   ];
 
   const RULE_STORAGE_KEY = "GB_PRODUCTION_ANALYZER_RULES_V1";
+  const WORKSPACE_STORAGE_KEY = "GB_PRODUCTION_WORKSPACE_V357";
   const runtimeRules = loadRuntimeRules();
 
   function loadRuntimeRules() {
@@ -84,6 +85,39 @@
       sources: [],
       updatedAt: ""
     };
+  }
+
+  function saveProductionWorkspace() {
+    try {
+      const payload = {
+        version: 357,
+        savedAt: Date.now(),
+        currentSession,
+        droppedProductionEntries,
+        analyzedKeys: Array.from(analyzedDroppedEntryKeys),
+        duplicateCounts: Array.from(droppedBatchDuplicateCounts.entries()),
+        lastAddedAt: Array.from(droppedBatchLastAddedAt.entries())
+      };
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) { console.warn("production workspace save failed", error); }
+  }
+
+  function restoreProductionWorkspace() {
+    try {
+      const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      if (!raw) return false;
+      const payload = JSON.parse(raw);
+      if (!payload || !payload.currentSession) return false;
+      currentSession = payload.currentSession || createEmptySession();
+      currentSession.records = Array.isArray(currentSession.records) ? currentSession.records : [];
+      currentSession.sources = Array.isArray(currentSession.sources) ? currentSession.sources : [];
+      droppedProductionEntries = Array.isArray(payload.droppedProductionEntries) ? payload.droppedProductionEntries : [];
+      analyzedDroppedEntryKeys = new Set(Array.isArray(payload.analyzedKeys) ? payload.analyzedKeys : []);
+      droppedBatchDuplicateCounts = new Map(Array.isArray(payload.duplicateCounts) ? payload.duplicateCounts : []);
+      droppedBatchLastAddedAt = new Map(Array.isArray(payload.lastAddedAt) ? payload.lastAddedAt : []);
+      lastAnalysis = currentSession.records.length ? aggregateAnalysisFromRecords(currentSession.records, currentSession.label || "目前工作階段") : null;
+      return !!(currentSession.records.length || droppedProductionEntries.length);
+    } catch (error) { console.warn("production workspace restore failed", error); return false; }
   }
 
   function $(id) {
@@ -1146,7 +1180,7 @@
     const process = entry?.process || inferProcess(parts, date) || "未指定";
     // V3.37：使用者實際拖入的最外層資料夾就是一個批次。
     // 子資料夾（日期、製程、OK 等）只作為批次內資訊，不再拆成多批。
-    const key = folder;
+    const key = `${process}|${folder}`;
     return { key, folder, date, process };
   }
 
@@ -1616,7 +1650,7 @@
         return `
           <div class="production-session-item ${isDone ? "is-analyzed" : "is-pending"}" data-key="${escapeHtml(source.key)}">
             <span class="production-session-main"><b class="production-session-status">${statusText}</b><span class="production-session-folder"><strong>${escapeHtml(source.folder)}</strong><small>${escapeHtml(source.date)}｜${escapeHtml(source.process)}</small>${dup}</span></span>
-            <span class="production-session-actions"><strong>${escapeHtml(countText)}</strong></span>
+            <span class="production-session-actions"><strong>${escapeHtml(countText)}</strong>${!isDeducted ? `<button type="button" class="secondary small danger-text production-batch-remove-btn" data-key="${escapeHtml(source.key)}">移除此批</button>` : `<span class="production-batch-locked">已扣存</span>`}</span>
           </div>`;
       };
       const pendingHtml = pendingBatches.length ? `<div class="production-session-group"><div class="production-session-group-title"><strong>等待分析</strong><span>${pendingBatches.length} 批｜${pendingCount} 檔</span></div>${pendingBatches.map(rowHtml).join("")}</div>` : `<div class="production-session-empty-state is-done">✓ 目前沒有等待分析的資料</div>`;
@@ -2135,6 +2169,7 @@
 
     lastProductChanges = new Map();
     refreshCurrentSessionMetadata();
+    saveProductionWorkspace();
     lastAnalysis = currentSession.records.length ? aggregateAnalysisFromRecords(currentSession.records, currentSession.label) : null;
 
     renderDroppedFolderSummary();
@@ -2669,6 +2704,7 @@
       if (analyzedNow.has(key)) analyzedDroppedEntryKeys.add(key);
     });
     updateProductionBatchStatus(Array.from(new Set(entries.map(e => e.productionBatchId).filter(Boolean))), "analyzed");
+    saveProductionWorkspace();
 
     captureAnalysisChange(previousProductRows, lastAnalysis);
     renderDroppedFolderSummary();
@@ -3030,6 +3066,7 @@ ${record.filename}
     });
     renderSessionPanel();
     renderAnalysis(lastAnalysis);
+    saveProductionWorkspace();
     updateProductionStatus("已從本次分析移除該檔案，商品使用量已重新計算。", "done");
   }
 
@@ -3147,6 +3184,40 @@ ${record.filename}
 
 
   function handleSessionAction(event) {
+    const batchRemoveBtn = event.target.closest(".production-batch-remove-btn");
+    if (batchRemoveBtn) {
+      const batchKey = batchRemoveBtn.dataset.key || "";
+      const batchEntries = droppedProductionEntries.filter(entry => productionBatchInfo(entry).key === batchKey);
+      const entryKeys = new Set(batchEntries.map(productionEntryKey));
+      const batchIds = new Set(batchEntries.map(e => e.productionBatchId).filter(Boolean));
+      const batchState = droppedFolderStates().find(row => row.key === batchKey);
+      const activeTx = getProductionTransactions().find(tx => tx.status === "active" && (tx.batchIds || []).some(id => batchIds.has(id)));
+      if (activeTx) {
+        alert("這一批已經扣除庫存，不能直接移除。請先到扣庫存紀錄復原該筆交易，再重新處理。");
+        return;
+      }
+      const label = batchState ? `${batchState.process}｜${batchState.folder}` : "這批資料";
+      if (!confirm(`確定移除「${label}」？\n\n此批的待分析資料、分析結果與待扣存數量都會一起移除；不會影響正式庫存。`)) return;
+      droppedProductionEntries = droppedProductionEntries.filter(entry => productionBatchInfo(entry).key !== batchKey);
+      entryKeys.forEach(key => analyzedDroppedEntryKeys.delete(key));
+      currentSession.records = (currentSession.records || []).filter(record => {
+        const recordKey = sourceKeyForProductionRecord(record);
+        if (entryKeys.has(recordKey)) return false;
+        if (batchIds.size && batchIds.has(record.productionBatchId)) return false;
+        return true;
+      });
+      droppedBatchDuplicateCounts.delete(batchKey);
+      droppedBatchLastAddedAt.delete(batchKey);
+      refreshCurrentSessionMetadata();
+      lastAnalysis = currentSession.records.length ? aggregateAnalysisFromRecords(currentSession.records, currentSession.label) : null;
+      saveProductionWorkspace();
+      renderDroppedFolderSummary();
+      renderSessionPanel();
+      if (lastAnalysis) renderAnalysis(lastAnalysis);
+      else { setProductionFlowState(null); renderDeductPreview(null); }
+      updateProductionStatus(`已移除「${label}」，其他批次保留不變。`, "done");
+      return;
+    }
     const editBtn = event.target.closest(".production-session-edit-btn");
     const removeBtn = event.target.closest(".production-session-remove-btn");
     if (!editBtn && !removeBtn) return;
@@ -3187,7 +3258,7 @@ ${record.filename}
     $("production").classList.add("production-center", "production-ux-v322", "production-ux-v325");
     // V3.20：版本提示由 JS 同步，避免 index.html 仍顯示舊版文字造成誤解。
     document.querySelectorAll("#production .production-version-badge").forEach(el => {
-      el.textContent = "V3.55 多色獨立數量與警告可處理修正";
+      el.textContent = "V3.57 批次可移除・工作區暫存版";
     });
     const dateInput = $("productionDateInput");
     if (dateInput && !dateInput.value) dateInput.value = todayString();
@@ -3258,6 +3329,7 @@ ${record.filename}
       const before = droppedProductionEntries.length;
       droppedProductionEntries = dedupeProductionEntries([...droppedProductionEntries, ...incomingUnique]);
       const added = droppedProductionEntries.length - before;
+      saveProductionWorkspace();
       renderDroppedFolderSummary();
       renderSessionPanel();
       const pending = droppedProductionEntries.filter(entry => !analyzedDroppedEntryKeys.has(productionEntryKey(entry))).length;
@@ -3307,6 +3379,9 @@ ${record.filename}
       addEntriesToProductionQueue(incoming, "拖曳的資料夾");
     });
 
+    const restoredWorkspace = restoreProductionWorkspace();
+    if (restoredWorkspace && lastAnalysis) renderAnalysis(lastAnalysis);
+    renderDroppedFolderSummary();
     renderSessionPanel();
     renderProductionBatchHistory();
     $("productionProcessQuickSelect")?.addEventListener("change", event => {
@@ -3316,7 +3391,7 @@ ${record.filename}
     });
     setProductionFlowState(lastAnalysis);
     renderDeductPreview(lastAnalysis);
-    updateProductionStatus("尚未開始分析。請先加入資料夾，再按「分析新增資料」。", "idle");
+    updateProductionStatus(restoredWorkspace ? "已恢復上次未完成的生產工作區；可繼續分析、移除錯誤批次或扣庫存。" : "尚未開始分析。請先加入資料夾，再按「分析新增資料」。", restoredWorkspace ? "done" : "idle");
     renderLearningRules();
     $("productionAnalyzeBtn")?.addEventListener("click", runAnalysis);
     $("productionConfirmDeductBtn")?.addEventListener("click", confirmProductionDeduction);
