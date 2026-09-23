@@ -4292,6 +4292,7 @@ renderAll = function() {
     const wrap = document.createElement("div");
     wrap.id = "gbFloatActions";
     wrap.innerHTML = `
+      <button id="gbHomeBtn" type="button" title="回庫存總覽">🏠</button>
       <button id="gbTopBtn" type="button" title="回到最上方">▲</button>
     `;
     document.body.appendChild(wrap);
@@ -4350,6 +4351,10 @@ renderAll = function() {
       window.scrollTo({top:0, behavior:"smooth"});
     };
 
+    document.getElementById("gbHomeBtn").onclick = function(){
+      if(typeof switchTab === "function") switchTab("overview");
+      setTimeout(()=>window.scrollTo({top:0, behavior:"smooth"}), 50);
+    };
   }
 
   function updateFloatingButtons(){
@@ -10967,176 +10972,383 @@ window.GB_VERSION = "goldenbird-inventory-v3.0.1-firebase-duplicate-fix";
   };
 })();
 
-/* ---------- V3.54 快速盤點雙模式修復 ---------- */
+
+/* GoldenBird Inventory v3.3.5｜修改品項分類同步＋Modal RWD 優化 */
 (function(){
-  let gbQuickStockModeV354 = 'audit';
-  const gbNumV354 = (v, fallback=0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+  window.GB_VERSION = "goldenbird-inventory-v3.3.5-edit-item-category-rwd";
 
-  function gbSetQuickStockModeV354(mode){
-    gbQuickStockModeV354 = mode === 'adjust' ? 'adjust' : 'audit';
-    document.querySelectorAll('.quick-stock-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.quickTab === gbQuickStockModeV354));
-    document.getElementById('quickStockPaneAudit')?.classList.toggle('active', gbQuickStockModeV354 === 'audit');
-    document.getElementById('quickStockPaneAdjust')?.classList.toggle('active', gbQuickStockModeV354 === 'adjust');
-    const confirm = document.getElementById('confirmQuickStockBtn');
-    if(confirm) confirm.textContent = gbQuickStockModeV354 === 'adjust' ? '確認調整' : '確認更新';
-    gbUpdateQuickAdjustPreviewV354();
+  function gbV335Esc(value){
+    return String(value ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
   }
 
-  function gbUpdateQuickAdjustPreviewV354(){
-    const item = getItem(document.getElementById('quickStockItemId')?.value);
-    const current = gbNumV354(item?.stock, gbNumV354(document.getElementById('quickStockOldQty')?.value));
-    const qty = gbNumV354(document.getElementById('quickAdjustQty')?.value, 0);
-    const type = document.getElementById('quickAdjustType')?.value || 'decrease';
-    const next = type === 'increase' ? current + qty : current - qty;
-    const currentEl = document.getElementById('quickAdjustCurrentQty');
-    const preview = document.getElementById('quickAdjustPreview');
-    if(currentEl) currentEl.textContent = current;
-    if(preview){
-      preview.innerHTML = qty ? `調整後庫存：<strong>${next}</strong> <span class="muted">（${current} ${type === 'increase' ? '+' : '-'} ${qty}）</span>` : `調整後庫存：${current}`;
-      preview.classList.toggle('danger', next < 0);
-    }
+  function gbV335Categories(){
+    if(!Array.isArray(data?.items)) return [];
+    return [...new Set(
+      data.items
+        .map(item => String(item.category || "").trim())
+        .filter(Boolean)
+    )].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
   }
 
-  openQuickStockModal = function(itemId){
-    const item = getItem(itemId); if(!item) return;
-    const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
-    set('quickStockItemId', item.id);
-    const title=document.getElementById('quickStockItemText'); if(title) title.textContent=item.name;
-    set('quickStockOldQty', Number(item.stock)||0);
-    const oldDisplay=document.getElementById('quickStockOldQtyDisplay'); if(oldDisplay) oldDisplay.textContent=Number(item.stock)||0;
-    set('quickStockNewQty', Number(item.stock)||0);
-    set('quickStockSafetyQty', Number(item.safety)||0);
-    set('quickStockReason','盤點更新'); set('quickStockCustomReason','');
-    set('quickAdjustQty',''); set('quickAdjustType','decrease'); set('quickAdjustReason','料物瑕疵'); set('quickAdjustNote','');
-    const err=document.getElementById('quickStockInlineError'); if(err){err.hidden=true;err.textContent='';}
-    gbSetQuickStockModeV354('audit');
-    openModal('quickStockModal');
+  function gbV335FillEditCategory(selectedValue){
+    const select = document.getElementById("editItemCategoryInput");
+    if(!select) return;
+
+    const current = String(selectedValue ?? select.value ?? "").trim();
+    const categories = gbV335Categories();
+
+    // 若舊資料的分類目前只有該品項使用，也保留在選單，避免打開後變空白。
+    if(current && !categories.includes(current)) categories.push(current);
+    categories.sort((a,b)=>a.localeCompare(b,"zh-Hant"));
+
+    select.innerHTML =
+      '<option value="">請選擇分類</option>' +
+      categories.map(category =>
+        `<option value="${gbV335Esc(category)}">${gbV335Esc(category)}</option>`
+      ).join("");
+
+    if(current) select.value = current;
+  }
+
+  // 修改品項視窗每次打開，都重新讀取「目前正式庫存品項」的實際分類。
+  const gbV335OldEditItem = window.editItem || (typeof editItem === "function" ? editItem : null);
+  if(gbV335OldEditItem){
+    const patchedEditItem = function(id){
+      const item = (typeof getItem === "function")
+        ? getItem(id)
+        : (data.items || []).find(row => row.id === id);
+
+      gbV335FillEditCategory(item?.category || "");
+      return gbV335OldEditItem(id);
+    };
+    try { editItem = patchedEditItem; } catch(e) {}
+    window.editItem = patchedEditItem;
+  }
+
+  // 儲存前再次將分類名稱對齊現有分類，避免大小寫/空白造成重複分類。
+  function gbV335NormalizeCategoryName(value){
+    const raw = String(value || "").trim();
+    if(!raw) return "";
+    return gbV335Categories().find(category =>
+      category.localeCompare(raw, "zh-Hant", {sensitivity:"accent"}) === 0 ||
+      category.toLowerCase() === raw.toLowerCase()
+    ) || raw;
+  }
+
+  const saveBtn = document.getElementById("saveEditItemBtn");
+  if(saveBtn && saveBtn.dataset.gbV335Bound !== "true"){
+    saveBtn.dataset.gbV335Bound = "true";
+    saveBtn.addEventListener("click", function(){
+      const select = document.getElementById("editItemCategoryInput");
+      if(select) select.value = gbV335NormalizeCategoryName(select.value);
+    }, true);
+  }
+
+  function gbV335InjectCss(){
+    if(document.getElementById("gbV335EditItemCss")) return;
+    const style = document.createElement("style");
+    style.id = "gbV335EditItemCss";
+    style.textContent = `
+      #editItemModal .modal-box{
+        width:min(680px, calc(100vw - 32px)) !important;
+        max-width:680px !important;
+        max-height:min(88vh, 860px) !important;
+        overflow-y:auto !important;
+        box-sizing:border-box !important;
+        padding:28px !important;
+      }
+      #editItemModal .field{
+        min-width:0 !important;
+      }
+      #editItemModal .field > label{
+        display:block !important;
+        margin-bottom:8px !important;
+        line-height:1.35 !important;
+      }
+      #editItemModal input:not([type="checkbox"]),
+      #editItemModal select{
+        width:100% !important;
+        min-width:0 !important;
+        min-height:52px !important;
+        box-sizing:border-box !important;
+        padding:0 16px !important;
+        font-size:16px !important;
+        line-height:1.35 !important;
+      }
+      #editItemModal .check-field{
+        display:flex !important;
+        align-items:center !important;
+        gap:10px !important;
+        min-height:44px !important;
+      }
+      #editItemModal .check-field label{
+        margin:0 !important;
+      }
+      #editItemModal .modal-actions{
+        display:flex !important;
+        justify-content:flex-end !important;
+        gap:12px !important;
+        margin-top:22px !important;
+      }
+      #editItemModal .modal-actions button{
+        min-width:112px !important;
+        min-height:50px !important;
+        white-space:nowrap !important;
+      }
+
+      /* 手機：所有欄位改成真正單欄，不縮字硬塞 */
+      @media (max-width:760px){
+        #editItemModal{
+          align-items:flex-end !important;
+          padding:0 !important;
+        }
+        #editItemModal .modal-box{
+          width:100% !important;
+          max-width:100% !important;
+          max-height:92dvh !important;
+          margin:0 !important;
+          border-radius:24px 24px 0 0 !important;
+          padding:22px 18px calc(18px + env(safe-area-inset-bottom)) !important;
+          overflow-x:hidden !important;
+        }
+        #editItemModal h3{
+          margin:0 0 20px !important;
+          font-size:24px !important;
+          line-height:1.25 !important;
+        }
+        #editItemModal .field{
+          width:100% !important;
+          display:block !important;
+          margin-bottom:16px !important;
+        }
+        #editItemModal input:not([type="checkbox"]),
+        #editItemModal select{
+          width:100% !important;
+          max-width:100% !important;
+          min-height:54px !important;
+          font-size:16px !important;
+          padding-left:14px !important;
+          padding-right:38px !important;
+          text-overflow:ellipsis !important;
+        }
+        #editItemModal .check-field{
+          display:flex !important;
+          margin:4px 0 18px !important;
+        }
+        #editItemModal .modal-actions{
+          position:sticky !important;
+          bottom:0 !important;
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+          gap:10px !important;
+          margin:10px -4px -4px !important;
+          padding:12px 4px 4px !important;
+          background:inherit !important;
+        }
+        #editItemModal .modal-actions button{
+          width:100% !important;
+          min-width:0 !important;
+          min-height:54px !important;
+          font-size:17px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  gbV335InjectCss();
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    gbV335InjectCss();
+    gbV335FillEditCategory("");
+  });
+
+  window.gbEditItemV335Check = function(){
+    return {
+      version: window.GB_VERSION,
+      categories: gbV335Categories(),
+      editCategoryOptions: [...(document.getElementById("editItemCategoryInput")?.options || [])].map(o=>o.value),
+      modalFound: !!document.getElementById("editItemModal")
+    };
   };
-  window.openQuickStockModal = openQuickStockModal;
-
-  confirmQuickStockUpdate = function(){
-    const item=getItem(document.getElementById('quickStockItemId')?.value); if(!item){showToast('找不到品項');return;}
-    const oldStock=Number(item.stock)||0;
-    if(gbQuickStockModeV354==='adjust'){
-      const qty=gbNumV354(document.getElementById('quickAdjustQty')?.value,0);
-      const type=document.getElementById('quickAdjustType')?.value||'decrease';
-      if(qty<=0){showToast('請輸入正確調整數量');return;}
-      const newStock=type==='increase'?oldStock+qty:oldStock-qty;
-      if(newStock<0){showToast('扣減後庫存不可小於 0');return;}
-      const reason=document.getElementById('quickAdjustReason')?.value || (type==='increase'?'增加庫存':'扣減庫存');
-      const note=document.getElementById('quickAdjustNote')?.value?.trim()||'';
-      item.stock=newStock;
-      addStockHistory(item,oldStock,newStock,type==='increase'?'庫存增加':'庫存扣減',note?`${reason}｜${note}`:reason);
-      lastUpdatedItemId=item.id; saveData(); closeModal('quickStockModal'); renderAll();
-      showToast(`${item.name} 已${type==='increase'?'增加':'扣減'} ${qty}，目前庫存 ${newStock}`); return;
-    }
-    const newQty=Number(document.getElementById('quickStockNewQty')?.value);
-    const newSafety=Number(document.getElementById('quickStockSafetyQty')?.value);
-    if(Number.isNaN(newQty)||newQty<0){showToast('請輸入正確庫存數量');return;}
-    if(Number.isNaN(newSafety)||newSafety<0){showToast('請輸入正確安全庫存');return;}
-    const oldSafety=Number(item.safety)||0;
-    const reason=document.getElementById('quickStockReason')?.value||'盤點更新';
-    const custom=document.getElementById('quickStockCustomReason')?.value?.trim()||'';
-    item.stock=newQty; item.safety=newSafety;
-    if(oldStock!==newQty||oldSafety!==newSafety){
-      const notes=[]; if(custom) notes.push(custom); if(oldSafety!==newSafety) notes.push(`安全庫存 ${oldSafety} → ${newSafety}`);
-      addStockHistory(item,oldStock,newQty,reason,notes.join('｜')); lastUpdatedItemId=item.id;
-    }
-    saveData(); closeModal('quickStockModal'); renderAll(); showToast(`${item.name} 已更新`);
-  };
-  window.confirmQuickStockUpdate=confirmQuickStockUpdate;
-
-  function bindV354(){
-    document.querySelectorAll('.quick-stock-tab').forEach(btn=>btn.onclick=()=>gbSetQuickStockModeV354(btn.dataset.quickTab));
-    ['quickAdjustQty','quickAdjustType'].forEach(id=>{const el=document.getElementById(id);if(el){el.oninput=gbUpdateQuickAdjustPreviewV354;el.onchange=gbUpdateQuickAdjustPreviewV354;}});
-    const confirm=document.getElementById('confirmQuickStockBtn'); if(confirm) confirm.onclick=confirmQuickStockUpdate;
-    const cancel=document.getElementById('cancelQuickStockBtn'); if(cancel) cancel.onclick=()=>closeModal('quickStockModal');
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bindV354); else bindV354();
 })();
 
-/* GoldenBird Inventory V3.58｜品項管理搜尋穩定修正
-   - 搜尋時跨全部分類，不被殘留分類篩選擋住
-   - Unicode / 全半形 / 空白正規化
-   - 固定從正式 data.items 搜尋，包含停用品項
-*/
+
+/* GoldenBird Inventory v3.3.6｜搜尋品項管理修正 */
 (function(){
-  function gbV358Normalize(value){
+  window.GB_VERSION = "goldenbird-inventory-v3.3.6-item-manage-search-fix";
+
+  function gbV336Esc(value){
+    return String(value ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  }
+
+  function gbV336Normalize(value){
     return String(value ?? "")
       .normalize("NFKC")
       .toLocaleLowerCase("zh-Hant")
-      .replace(/[\s\u3000]+/g, "")
-      .trim();
+      .replace(/\s+/g, "")
+      .replace(/[／/｜|・·_\-—–()（）【】\[\]]/g, "");
   }
 
-  function gbV358RenderItemManageTable(){
-    const tbody = document.getElementById("itemManageTable");
-    if (!tbody || typeof data === "undefined") return;
-
-    const searchInput = document.getElementById("itemManageSearch");
-    const categorySelect = document.getElementById("itemManageCategoryFilter");
-    const keywordRaw = searchInput?.value || "";
-    const keyword = gbV358Normalize(keywordRaw);
-    const selectedCategory = categorySelect?.value || "all";
-    const allItems = Array.isArray(data.items) ? data.items : [];
-
-    // 有輸入關鍵字時，搜尋正式品項全集，不讓先前分類篩選造成「明明存在卻找不到」。
-    const rows = allItems
-      .filter(item => {
-        if (!keyword) return selectedCategory === "all" || item.category === selectedCategory;
-        const haystack = [item.name, item.category, item.dept, item.note]
-          .map(gbV358Normalize)
-          .join("|");
-        return haystack.includes(keyword);
-      })
-      .map(item => `
-        <tr class="${item.id === lastCreatedItemId ? "highlight-row" : ""}">
-          <td>${typeof gbEsc === "function" ? gbEsc(item.name || "") : (item.name || "")}</td>
-          <td>${typeof gbEsc === "function" ? gbEsc(item.category || "") : (item.category || "")}</td>
-          <td>${Number(item.safety) || 0}</td>
-          <td>${item.disabled ? "已停用" : "使用中"}</td>
-          <td>
-            <button class="secondary small edit-item-btn" data-id="${item.id}">修改</button>
-            <button class="danger small toggle-item-btn" data-id="${item.id}">${item.disabled ? "啟用" : "停用"}</button>
-            <button class="danger small delete-item-btn" data-id="${item.id}" style="background:#7a1f1f">刪除</button>
-          </td>
-        </tr>
-      `).join("");
-
-    tbody.innerHTML = rows || `<tr><td colspan="5">找不到符合的品項</td></tr>`;
-    tbody.querySelectorAll(".edit-item-btn").forEach(btn => btn.onclick = () => editItem(btn.dataset.id));
-    tbody.querySelectorAll(".toggle-item-btn").forEach(btn => btn.onclick = () => toggleItemDisabled(btn.dataset.id));
-    tbody.querySelectorAll(".delete-item-btn").forEach(btn => btn.onclick = () => openDeleteItem(btn.dataset.id));
+  function gbV336AllItems(){
+    return (typeof data !== "undefined" && Array.isArray(data.items)) ? data.items : [];
   }
 
-  // 覆蓋前面歷史版本重複宣告的 renderItemManageTable。
-  renderItemManageTable = gbV358RenderItemManageTable;
-  window.renderItemManageTable = gbV358RenderItemManageTable;
-
-  function gbV358BindItemSearch(){
-    const input = document.getElementById("itemManageSearch");
-    if (input && input.dataset.gbV358Bound !== "1") {
-      input.addEventListener("input", gbV358RenderItemManageTable);
-      input.addEventListener("search", gbV358RenderItemManageTable);
-      input.dataset.gbV358Bound = "1";
-    }
+  function gbV336RefreshCategoryOptions(items){
     const select = document.getElementById("itemManageCategoryFilter");
-    if (select && select.dataset.gbV358Bound !== "1") {
-      select.addEventListener("change", gbV358RenderItemManageTable);
-      select.dataset.gbV358Bound = "1";
+    if(!select) return "all";
+
+    const before = select.value || window.itemManageCategoryValue || "all";
+    const categories = [...new Set(
+      items.map(item => String(item.category || "").trim()).filter(Boolean)
+    )].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
+
+    select.innerHTML =
+      '<option value="all">全部分類</option>' +
+      categories.map(category =>
+        `<option value="${gbV336Esc(category)}">${gbV336Esc(category)}</option>`
+      ).join("");
+
+    select.value = categories.includes(before) ? before : "all";
+    try { itemManageCategoryValue = select.value; } catch(e) {}
+    return select.value;
+  }
+
+  function gbV336RenderItemManageTable(){
+    const tbody = document.getElementById("itemManageTable");
+    if(!tbody) return;
+
+    const allItems = gbV336AllItems();
+    const categorySelect = document.getElementById("itemManageCategoryFilter");
+    const searchInput = document.getElementById("itemManageSearch");
+    const rawKeyword = String(searchInput?.value || "").trim();
+    const keyword = gbV336Normalize(rawKeyword);
+
+    let category = gbV336RefreshCategoryOptions(allItems);
+
+    /*
+      搜尋框的目的就是「找現有品項」：
+      一旦有輸入關鍵字，直接搜尋全部正式庫存品項，
+      不讓先前殘留的分類篩選把結果擋掉。
+    */
+    if(keyword && categorySelect && category !== "all"){
+      categorySelect.value = "all";
+      category = "all";
+      try { itemManageCategoryValue = "all"; } catch(e) {}
+    }
+
+    const filtered = allItems.filter(item => {
+      if(category !== "all" && String(item.category || "") !== category) return false;
+      if(!keyword) return true;
+
+      const haystack = [
+        item.name,
+        item.category,
+        item.dept,
+        item.note,
+        item.id
+      ].map(gbV336Normalize).join(" ");
+
+      return haystack.includes(keyword);
+    });
+
+    const rows = filtered.map(item => `
+      <tr class="${item.id === (typeof lastCreatedItemId !== "undefined" ? lastCreatedItemId : "") ? "highlight-row" : ""}">
+        <td>${gbV336Esc(item.name || "")}</td>
+        <td>${gbV336Esc(item.category || "")}</td>
+        <td>${Number(item.safety) || 0}</td>
+        <td>${item.disabled ? "已停用" : "使用中"}</td>
+        <td>
+          <button class="secondary small edit-item-btn" data-id="${gbV336Esc(item.id)}">修改</button>
+          <button class="danger small toggle-item-btn" data-id="${gbV336Esc(item.id)}">${item.disabled ? "啟用" : "停用"}</button>
+          <button class="danger small delete-item-btn" data-id="${gbV336Esc(item.id)}" style="background:#7a1f1f">刪除</button>
+        </td>
+      </tr>
+    `).join("");
+
+    tbody.innerHTML = rows || `
+      <tr>
+        <td colspan="5" style="padding:28px 16px;text-align:center">
+          <strong>找不到「${gbV336Esc(rawKeyword)}」</strong>
+          <div style="margin-top:6px;color:var(--muted,#7b8b8d);font-size:14px">
+            目前正式庫存共有 ${allItems.length} 個品項；搜尋會包含使用中與已停用品項。
+          </div>
+        </td>
+      </tr>`;
+
+    document.querySelectorAll("#itemManageTable .edit-item-btn").forEach(button => {
+      button.onclick = () => editItem(button.dataset.id);
+    });
+    document.querySelectorAll("#itemManageTable .toggle-item-btn").forEach(button => {
+      button.onclick = () => toggleItemDisabled(button.dataset.id);
+    });
+    document.querySelectorAll("#itemManageTable .delete-item-btn").forEach(button => {
+      button.onclick = () => openDeleteItem(button.dataset.id);
+    });
+
+    const note = document.querySelector("#itemManageTable")?.closest(".admin-section, .card, section")?.querySelector(".item-manage-search-result");
+    if(note) note.textContent = rawKeyword ? `找到 ${filtered.length} 個品項` : `共 ${filtered.length} 個品項`;
+  }
+
+  // 直接覆蓋舊版同名函式，避免前面多版 renderItemManageTable 互相干擾。
+  try { renderItemManageTable = gbV336RenderItemManageTable; } catch(e) {}
+  window.renderItemManageTable = gbV336RenderItemManageTable;
+
+  function gbV336Bind(){
+    const search = document.getElementById("itemManageSearch");
+    const category = document.getElementById("itemManageCategoryFilter");
+    const reset = document.getElementById("resetItemManageFilterBtn");
+
+    if(search){
+      search.oninput = gbV336RenderItemManageTable;
+      search.onsearch = gbV336RenderItemManageTable;
+    }
+
+    if(category){
+      category.onchange = function(){
+        try { itemManageCategoryValue = category.value || "all"; } catch(e) {}
+        gbV336RenderItemManageTable();
+      };
+    }
+
+    if(reset){
+      reset.onclick = function(event){
+        event.preventDefault();
+        if(search) search.value = "";
+        if(category) category.value = "all";
+        try { itemManageCategoryValue = "all"; } catch(e) {}
+        gbV336RenderItemManageTable();
+      };
     }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    gbV358BindItemSearch();
-    setTimeout(gbV358BindItemSearch, 500);
-    setTimeout(gbV358RenderItemManageTable, 700);
+  document.addEventListener("DOMContentLoaded", ()=>{
+    gbV336Bind();
+    setTimeout(gbV336RenderItemManageTable, 300);
+    setTimeout(gbV336RenderItemManageTable, 1200);
   });
 
-  // 後台 UI 可能重建節點，進入品項管理時重新綁定。
-  document.addEventListener("click", event => {
-    const target = event.target?.closest?.("[data-admin-tab='items'], [data-tab='admin']");
-    if (!target) return;
-    setTimeout(() => { gbV358BindItemSearch(); gbV358RenderItemManageTable(); }, 80);
+  // Firebase/遠端資料晚一點載入時，再補一次綁定與刷新。
+  window.addEventListener("focus", ()=>{
+    gbV336Bind();
+    if(document.getElementById("itemManageTable")) gbV336RenderItemManageTable();
   });
+
+  window.gbItemManageSearchV336Check = function(keyword){
+    const all = gbV336AllItems();
+    const key = gbV336Normalize(keyword || "");
+    return {
+      version: window.GB_VERSION,
+      totalItems: all.length,
+      keyword: keyword || "",
+      matches: all.filter(item => [
+        item.name,item.category,item.dept,item.note,item.id
+      ].map(gbV336Normalize).join(" ").includes(key)).map(item => item.name)
+    };
+  };
 })();
+
