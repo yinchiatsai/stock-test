@@ -11352,3 +11352,93 @@ window.GB_VERSION = "goldenbird-inventory-v3.0.1-firebase-duplicate-fix";
   };
 })();
 
+
+
+/* ---------- V3.54 快速盤點雙模式修復 ---------- */
+(function(){
+  let gbQuickStockModeV354 = 'audit';
+  const gbNumV354 = (v, fallback=0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+
+  function gbSetQuickStockModeV354(mode){
+    gbQuickStockModeV354 = mode === 'adjust' ? 'adjust' : 'audit';
+    document.querySelectorAll('.quick-stock-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.quickTab === gbQuickStockModeV354));
+    document.getElementById('quickStockPaneAudit')?.classList.toggle('active', gbQuickStockModeV354 === 'audit');
+    document.getElementById('quickStockPaneAdjust')?.classList.toggle('active', gbQuickStockModeV354 === 'adjust');
+    const confirm = document.getElementById('confirmQuickStockBtn');
+    if(confirm) confirm.textContent = gbQuickStockModeV354 === 'adjust' ? '確認調整' : '確認更新';
+    gbUpdateQuickAdjustPreviewV354();
+  }
+
+  function gbUpdateQuickAdjustPreviewV354(){
+    const item = getItem(document.getElementById('quickStockItemId')?.value);
+    const current = gbNumV354(item?.stock, gbNumV354(document.getElementById('quickStockOldQty')?.value));
+    const qty = gbNumV354(document.getElementById('quickAdjustQty')?.value, 0);
+    const type = document.getElementById('quickAdjustType')?.value || 'decrease';
+    const next = type === 'increase' ? current + qty : current - qty;
+    const currentEl = document.getElementById('quickAdjustCurrentQty');
+    const preview = document.getElementById('quickAdjustPreview');
+    if(currentEl) currentEl.textContent = current;
+    if(preview){
+      preview.innerHTML = qty ? `調整後庫存：<strong>${next}</strong> <span class="muted">（${current} ${type === 'increase' ? '+' : '-'} ${qty}）</span>` : `調整後庫存：${current}`;
+      preview.classList.toggle('danger', next < 0);
+    }
+  }
+
+  openQuickStockModal = function(itemId){
+    const item = getItem(itemId); if(!item) return;
+    const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+    set('quickStockItemId', item.id);
+    const title=document.getElementById('quickStockItemText'); if(title) title.textContent=item.name;
+    set('quickStockOldQty', Number(item.stock)||0);
+    const oldDisplay=document.getElementById('quickStockOldQtyDisplay'); if(oldDisplay) oldDisplay.textContent=Number(item.stock)||0;
+    set('quickStockNewQty', Number(item.stock)||0);
+    set('quickStockSafetyQty', Number(item.safety)||0);
+    set('quickStockReason','盤點更新'); set('quickStockCustomReason','');
+    set('quickAdjustQty',''); set('quickAdjustType','decrease'); set('quickAdjustReason','料物瑕疵'); set('quickAdjustNote','');
+    const err=document.getElementById('quickStockInlineError'); if(err){err.hidden=true;err.textContent='';}
+    gbSetQuickStockModeV354('audit');
+    openModal('quickStockModal');
+  };
+  window.openQuickStockModal = openQuickStockModal;
+
+  confirmQuickStockUpdate = function(){
+    const item=getItem(document.getElementById('quickStockItemId')?.value); if(!item){showToast('找不到品項');return;}
+    const oldStock=Number(item.stock)||0;
+    if(gbQuickStockModeV354==='adjust'){
+      const qty=gbNumV354(document.getElementById('quickAdjustQty')?.value,0);
+      const type=document.getElementById('quickAdjustType')?.value||'decrease';
+      if(qty<=0){showToast('請輸入正確調整數量');return;}
+      const newStock=type==='increase'?oldStock+qty:oldStock-qty;
+      if(newStock<0){showToast('扣減後庫存不可小於 0');return;}
+      const reason=document.getElementById('quickAdjustReason')?.value || (type==='increase'?'增加庫存':'扣減庫存');
+      const note=document.getElementById('quickAdjustNote')?.value?.trim()||'';
+      item.stock=newStock;
+      addStockHistory(item,oldStock,newStock,type==='increase'?'庫存增加':'庫存扣減',note?`${reason}｜${note}`:reason);
+      lastUpdatedItemId=item.id; saveData(); closeModal('quickStockModal'); renderAll();
+      showToast(`${item.name} 已${type==='increase'?'增加':'扣減'} ${qty}，目前庫存 ${newStock}`); return;
+    }
+    const newQty=Number(document.getElementById('quickStockNewQty')?.value);
+    const newSafety=Number(document.getElementById('quickStockSafetyQty')?.value);
+    if(Number.isNaN(newQty)||newQty<0){showToast('請輸入正確庫存數量');return;}
+    if(Number.isNaN(newSafety)||newSafety<0){showToast('請輸入正確安全庫存');return;}
+    const oldSafety=Number(item.safety)||0;
+    const reason=document.getElementById('quickStockReason')?.value||'盤點更新';
+    const custom=document.getElementById('quickStockCustomReason')?.value?.trim()||'';
+    item.stock=newQty; item.safety=newSafety;
+    if(oldStock!==newQty||oldSafety!==newSafety){
+      const notes=[]; if(custom) notes.push(custom); if(oldSafety!==newSafety) notes.push(`安全庫存 ${oldSafety} → ${newSafety}`);
+      addStockHistory(item,oldStock,newQty,reason,notes.join('｜')); lastUpdatedItemId=item.id;
+    }
+    saveData(); closeModal('quickStockModal'); renderAll(); showToast(`${item.name} 已更新`);
+  };
+  window.confirmQuickStockUpdate=confirmQuickStockUpdate;
+
+  function bindV354(){
+    document.querySelectorAll('.quick-stock-tab').forEach(btn=>btn.onclick=()=>gbSetQuickStockModeV354(btn.dataset.quickTab));
+    ['quickAdjustQty','quickAdjustType'].forEach(id=>{const el=document.getElementById(id);if(el){el.oninput=gbUpdateQuickAdjustPreviewV354;el.onchange=gbUpdateQuickAdjustPreviewV354;}});
+    const confirm=document.getElementById('confirmQuickStockBtn'); if(confirm) confirm.onclick=confirmQuickStockUpdate;
+    const cancel=document.getElementById('cancelQuickStockBtn'); if(cancel) cancel.onclick=()=>closeModal('quickStockModal');
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bindV354); else bindV354();
+})();
+
