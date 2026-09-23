@@ -11054,3 +11054,89 @@ window.GB_VERSION = "goldenbird-inventory-v3.0.1-firebase-duplicate-fix";
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bindV354); else bindV354();
 })();
+
+/* GoldenBird Inventory V3.58｜品項管理搜尋穩定修正
+   - 搜尋時跨全部分類，不被殘留分類篩選擋住
+   - Unicode / 全半形 / 空白正規化
+   - 固定從正式 data.items 搜尋，包含停用品項
+*/
+(function(){
+  function gbV358Normalize(value){
+    return String(value ?? "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("zh-Hant")
+      .replace(/[\s\u3000]+/g, "")
+      .trim();
+  }
+
+  function gbV358RenderItemManageTable(){
+    const tbody = document.getElementById("itemManageTable");
+    if (!tbody || typeof data === "undefined") return;
+
+    const searchInput = document.getElementById("itemManageSearch");
+    const categorySelect = document.getElementById("itemManageCategoryFilter");
+    const keywordRaw = searchInput?.value || "";
+    const keyword = gbV358Normalize(keywordRaw);
+    const selectedCategory = categorySelect?.value || "all";
+    const allItems = Array.isArray(data.items) ? data.items : [];
+
+    // 有輸入關鍵字時，搜尋正式品項全集，不讓先前分類篩選造成「明明存在卻找不到」。
+    const rows = allItems
+      .filter(item => {
+        if (!keyword) return selectedCategory === "all" || item.category === selectedCategory;
+        const haystack = [item.name, item.category, item.dept, item.note]
+          .map(gbV358Normalize)
+          .join("|");
+        return haystack.includes(keyword);
+      })
+      .map(item => `
+        <tr class="${item.id === lastCreatedItemId ? "highlight-row" : ""}">
+          <td>${typeof gbEsc === "function" ? gbEsc(item.name || "") : (item.name || "")}</td>
+          <td>${typeof gbEsc === "function" ? gbEsc(item.category || "") : (item.category || "")}</td>
+          <td>${Number(item.safety) || 0}</td>
+          <td>${item.disabled ? "已停用" : "使用中"}</td>
+          <td>
+            <button class="secondary small edit-item-btn" data-id="${item.id}">修改</button>
+            <button class="danger small toggle-item-btn" data-id="${item.id}">${item.disabled ? "啟用" : "停用"}</button>
+            <button class="danger small delete-item-btn" data-id="${item.id}" style="background:#7a1f1f">刪除</button>
+          </td>
+        </tr>
+      `).join("");
+
+    tbody.innerHTML = rows || `<tr><td colspan="5">找不到符合的品項</td></tr>`;
+    tbody.querySelectorAll(".edit-item-btn").forEach(btn => btn.onclick = () => editItem(btn.dataset.id));
+    tbody.querySelectorAll(".toggle-item-btn").forEach(btn => btn.onclick = () => toggleItemDisabled(btn.dataset.id));
+    tbody.querySelectorAll(".delete-item-btn").forEach(btn => btn.onclick = () => openDeleteItem(btn.dataset.id));
+  }
+
+  // 覆蓋前面歷史版本重複宣告的 renderItemManageTable。
+  renderItemManageTable = gbV358RenderItemManageTable;
+  window.renderItemManageTable = gbV358RenderItemManageTable;
+
+  function gbV358BindItemSearch(){
+    const input = document.getElementById("itemManageSearch");
+    if (input && input.dataset.gbV358Bound !== "1") {
+      input.addEventListener("input", gbV358RenderItemManageTable);
+      input.addEventListener("search", gbV358RenderItemManageTable);
+      input.dataset.gbV358Bound = "1";
+    }
+    const select = document.getElementById("itemManageCategoryFilter");
+    if (select && select.dataset.gbV358Bound !== "1") {
+      select.addEventListener("change", gbV358RenderItemManageTable);
+      select.dataset.gbV358Bound = "1";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    gbV358BindItemSearch();
+    setTimeout(gbV358BindItemSearch, 500);
+    setTimeout(gbV358RenderItemManageTable, 700);
+  });
+
+  // 後台 UI 可能重建節點，進入品項管理時重新綁定。
+  document.addEventListener("click", event => {
+    const target = event.target?.closest?.("[data-admin-tab='items'], [data-tab='admin']");
+    if (!target) return;
+    setTimeout(() => { gbV358BindItemSearch(); gbV358RenderItemManageTable(); }, 80);
+  });
+})();
