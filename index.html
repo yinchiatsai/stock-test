@@ -82,7 +82,7 @@
           <h2>生產扣庫</h2>
           <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
         </div>
-        <span class="badge info production-version-badge">V3.55 多色獨立數量與警告可處理修正</span>
+        <span class="badge info production-version-badge">V3.56 多色獨立數量與警告可處理修正</span>
       </div>
 
       <div class="production-simple-steps" aria-label="生產扣庫流程">
@@ -102,6 +102,19 @@
           <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
         </div>
 
+        <div class="production-process-first-row">
+          <label for="productionProcessQuickSelect"><strong>這批資料是哪個製程？</strong><span>先選製程，再加入資料夾</span></label>
+          <select id="productionProcessQuickSelect">
+            <option value="">請先選擇製程</option>
+            <option value="雷雕">雷雕</option>
+            <option value="彩噴">彩噴</option>
+            <option value="熱轉印">熱轉印</option>
+            <option value="熱昇華">熱昇華</option>
+            <option value="軟墨">軟墨</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+
         <div id="productionDropZone" class="production-drop-zone" tabindex="0">
           <input id="productionFileInput" class="production-folder-native-input" type="file" multiple webkitdirectory directory />
           <div class="production-drop-icon">＋</div>
@@ -118,7 +131,7 @@
             <div class="field production-date-single"><label>日期</label><input id="productionDateInput" type="date" /></div>
             <div class="field production-date-range hidden"><label>開始日期</label><input id="productionStartDateInput" type="date" /></div>
             <div class="field production-date-range hidden"><label>結束日期</label><input id="productionEndDateInput" type="date" /></div>
-            <div class="field production-process-field"><label>製程 <small>（選擇器模式需要時填）</small></label><input id="productionProcessInput" placeholder="例如：金屬、彩印" /></div>
+            <div class="field production-process-field"><label>製程 <small>（選擇器模式需要時填）</small></label><input id="productionProcessInput" placeholder="例如：雷雕、彩噴" /></div>
           </div>
         </details>
 
@@ -133,7 +146,7 @@
         <div id="productionSummaryCards" class="production-summary-grid"><div class="production-summary-empty">尚未分析</div></div>
         <div class="production-session-box production-simple-session">
           <div class="production-session-head"><strong>本次生產資料</strong><span id="productionSessionLabel">尚未建立</span></div>
-          <div id="productionSessionList" class="production-session-list">加入資料夾後會顯示每批進度。</div>
+          <div id="productionSessionList" class="production-session-list">加入資料夾後會顯示每批進度。</div><div id="productionBatchHistory" class="production-batch-history"></div>
           <div class="production-session-primary-action">
             <button id="productionAnalyzeBtn" type="button" class="production-main-action" disabled>分析新增資料</button>
           </div>
