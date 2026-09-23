@@ -73,6 +73,35 @@
     </section>
 
     <!-- 在途商品 -->
+    <section id="incoming" class="tab-panel hidden">
+      <div class="section-title">
+        <h2>在途商品 / 到貨登記</h2>
+        <span class="badge info">查看叫貨並直接確認到貨</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>叫貨日期</th>
+            <th>品項</th>
+            <th>叫貨數量</th>
+            <th>已到貨</th>
+            <th>剩餘在途</th>
+            <th>成本</th>
+            <th>叫貨人</th>
+            <th>狀態</th>
+            <th>本次到貨</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="incomingTable"></tbody>
+      </table>
+    </section>
+
+    <!-- 管理後台 -->
+    
+
+
     <section id="production" class="tab-panel hidden production-center production-ux-v321">
       <div class="production-page-head production-simple-head">
         <div>
@@ -233,8 +262,7 @@
             <th>叫貨數量</th>
             <th>已到貨</th>
             <th>剩餘在途</th>
-            <th>成本</th>
-            <th>叫貨人</th>
+<th>叫貨人</th>
             <th>狀態</th>
             <th>本次到貨</th>
             <th>操作</th>
@@ -246,6 +274,7 @@
 
     <!-- 管理後台 -->
     
+
 
 
     <section id="history" class="tab-panel hidden">
@@ -510,26 +539,62 @@
 
 
   <div id="quickStockModal" class="modal-mask">
-    <div class="modal-box">
+    <div class="modal-box quick-stock-modal-box">
       <h3>快速盤點</h3>
       <input type="hidden" id="quickStockItemId" />
       <p id="quickStockItemText">請確認品項</p>
-      <div class="field"><label>目前庫存</label><input id="quickStockOldQty" readonly /></div>
-      <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
-      <div class="field">
-        <label>異動原因</label>
-        <select id="quickStockReason">
-          <option value="盤點更新">盤點更新</option>
-          <option value="報廢調整">報廢調整</option>
-          <option value="借出調整">借出調整</option>
-          <option value="歸還調整">歸還調整</option>
-          <option value="其他調整">其他調整</option>
-        </select>
+
+      <div class="quick-stock-tabs" role="tablist" aria-label="快速盤點模式">
+        <button type="button" class="quick-stock-tab active" data-quick-tab="audit">盤點修正</button>
+        <button type="button" class="quick-stock-tab" data-quick-tab="adjust">庫存調整</button>
       </div>
-      <div class="field">
-        <label>自訂原因（選填）</label>
-        <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
-      </div>
+
+      <section class="quick-stock-pane active" id="quickStockPaneAudit">
+        <div class="field"><label>目前庫存</label><div id="quickStockOldQtyDisplay" class="readonly-value stock-readonly-display">0</div><input id="quickStockOldQty" type="hidden" readonly /></div>
+        <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
+        <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
+        <div class="field">
+          <label>異動原因</label>
+          <select id="quickStockReason">
+            <option value="盤點更新">盤點更新</option>
+            <option value="盤點修正">盤點修正</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>自訂原因（選填）</label>
+          <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
+        </div>
+      </section>
+
+      <section class="quick-stock-pane" id="quickStockPaneAdjust">
+        <div class="quick-stock-current">目前庫存：<strong id="quickAdjustCurrentQty">0</strong></div>
+        <div class="field">
+          <label>調整方式</label>
+          <select id="quickAdjustType">
+            <option value="decrease">扣減庫存</option>
+            <option value="increase">增加庫存</option>
+          </select>
+        </div>
+        <div class="field"><label>調整數量</label><input id="quickAdjustQty" type="number" min="1" placeholder="例如：10" /></div>
+        <div class="field">
+          <label>原因</label>
+          <select id="quickAdjustReason">
+            <option value="料物瑕疵">料物瑕疵</option>
+            <option value="報廢調整">報廢調整</option>
+            <option value="測試耗材">測試耗材</option>
+            <option value="遺失">遺失</option>
+            <option value="其他調整">其他調整</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>備註（選填）</label>
+          <input id="quickAdjustNote" placeholder="例如：製程發現料物瑕疵" />
+        </div>
+        <div class="quick-adjust-preview" id="quickAdjustPreview">調整後庫存：-</div>
+        <div class="modal-inline-error" id="quickStockInlineError" hidden></div>
+      </section>
+
       <div class="modal-actions">
         <button class="secondary" id="cancelQuickStockBtn" type="button">取消</button>
         <button id="confirmQuickStockBtn" type="button">確認更新</button>
@@ -589,6 +654,52 @@
       </div>
     </div>
   </div>
+
+  <div id="productionProductPickerModal" class="modal-mask">
+    <div class="modal-box production-picker-modal-box production-picker-simple">
+      <div class="production-picker-header">
+        <div>
+          <h3>處理商品</h3>
+          <p class="production-picker-subtitle" id="productionProductPickerTitle">確認這個製作檔要扣哪些庫存，以及各扣多少。</p>
+        </div>
+        <div class="production-picker-detected-qty">辨識數量 <strong id="productionProductPickerDetectedQty">1</strong></div>
+      </div>
+
+      <div id="productionProductPickerExistingRule" class="production-picker-existing-rule hidden"></div>
+      <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
+
+      <div id="productionProductPickerList" class="production-picker-list"></div>
+
+      <div class="production-picker-add-row">
+        <div class="field production-picker-search-field">
+          <label>新增庫存品項</label>
+          <input id="productionProductPickerSearch" type="text" placeholder="搜尋庫存，例如：黃銅片、木頭底座" autocomplete="off" />
+          <div id="productionProductPickerResults" class="production-picker-results">
+            <div class="production-picker-empty">輸入關鍵字後，點選品項即可加入。</div>
+          </div>
+        </div>
+        <div class="field production-picker-qty-field">
+          <label>扣除數量</label>
+          <input id="productionProductPickerQty" type="number" min="1" step="1" inputmode="numeric" value="1" />
+        </div>
+      </div>
+
+      <div class="production-picker-footer-options">
+        <label class="check-field production-picker-check">
+          <input type="checkbox" id="productionProductPickerPermanent" checked />
+          <span>記住這個商品的扣庫存方式</span>
+        </label>
+        <button type="button" class="production-picker-stats-link" id="productionPickerStatsOnlyBtn">這個商品不扣庫存</button>
+      </div>
+
+
+      <div class="modal-actions production-picker-actions">
+        <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
+        <button id="productionProductPickerSaveBtn" type="button">確認</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- 刪除品項 Modal -->
   <div id="deleteItemModal" class="modal-mask">
