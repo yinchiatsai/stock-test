@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>金雀庫存管理系統</title>
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/production.css" />
 </head>
 <body>
 
@@ -24,8 +23,7 @@
         <p>庫存查詢・在途管理・成本報表・商品對應</p>
       </div>
 
-      <button id="mobileAccountToggleBtn" class="secondary small mobile-account-toggle" type="button">帳號 / 同步 ▾</button>
-      <div class="role-box" id="roleBox">
+      <div class="role-box">
         <span>目前身份</span>
         <select id="roleSelect">
           <option value="staff">全員 / 美編</option>
@@ -46,7 +44,6 @@
     <nav class="tabs">
       <button class="tab active" data-tab="overview">📦 庫存總覽</button>
       <button class="tab" data-tab="incoming">🚚 在途商品</button>
-      <button class="tab" data-tab="production">📈 生產分析</button>
       <button class="tab" data-tab="history">📜 最近庫存異動</button>
       <button class="tab" data-tab="admin">⚙️ 管理後台</button>
     </nav>
@@ -73,153 +70,6 @@
       <div id="inventoryGrid"></div>
     </section>
 
-
-    <!-- 生產扣庫 -->
-    <section id="production" class="tab-panel hidden production-center production-ux-v321">
-      <div class="production-page-head production-simple-head">
-        <div>
-          <p class="production-kicker">Production</p>
-          <h2>生產扣庫</h2>
-          <p class="production-subtitle">選擇資料夾，系統自動判斷、合併重複製作檔並整理成可扣庫存的商品數量。</p>
-        </div>
-        <span class="badge info production-version-badge">V3.56 多色獨立數量與警告可處理修正</span>
-      </div>
-
-      <div class="production-simple-steps" aria-label="生產扣庫流程">
-        <span class="is-active" data-step="analyze"><b>1</b> 上傳分析</span>
-        <i>→</i>
-        <span data-step="review"><b>2</b> 確認異常</span>
-        <i>→</i>
-        <span data-step="deduct"><b>3</b> 扣庫存</span>
-      </div>
-      <div class="production-flow-strip production-flow-hidden" aria-hidden="true">
-        <div class="production-flow-step is-active" data-step="analyze"></div><div class="production-flow-step" data-step="review"></div><div class="production-flow-step" data-step="deduct"></div>
-      </div>
-
-      <section class="card production-simple-upload">
-        <div class="production-simple-upload-head">
-          <div><h3>1. 選擇生產資料</h3><p class="note">可連續加入多個資料夾；每批會顯示資料夾名稱、待分析／已分析狀態，重複檔案會自動略過並提示。</p></div>
-          <div id="productionStatusBox" class="production-status-box">尚未開始分析</div>
-        </div>
-
-        <div class="production-process-first-row">
-          <label for="productionProcessQuickSelect"><strong>這批資料是哪個製程？</strong><span>先選製程，再加入資料夾</span></label>
-          <select id="productionProcessQuickSelect">
-            <option value="">請先選擇製程</option>
-            <option value="雷雕">雷雕</option>
-            <option value="彩噴">彩噴</option>
-            <option value="熱轉印">熱轉印</option>
-            <option value="熱昇華">熱昇華</option>
-            <option value="軟墨">軟墨</option>
-            <option value="其他">其他</option>
-          </select>
-        </div>
-
-        <div id="productionDropZone" class="production-drop-zone" tabindex="0">
-          <input id="productionFileInput" class="production-folder-native-input" type="file" multiple webkitdirectory directory />
-          <div class="production-drop-icon">＋</div>
-          <strong>將生產資料夾拖曳到這裡</strong>
-          <span>可一次拖入多天、多種製程資料夾；系統會依資料夾路徑自動判斷。</span>
-          <button id="productionChooseFolderBtn" type="button" class="production-folder-button">或點此選擇資料夾</button>
-        </div>
-        <div id="productionSelectedFolderText" class="production-drop-summary">尚未加入資料夾</div>
-
-        <details class="production-advanced-input">
-          <summary>進階：手動指定日期／製程</summary>
-          <div class="production-simple-fields">
-            <div class="field production-mode-field"><label>分析模式</label><select id="productionModeInput"><option value="single">單日分析</option><option value="range">日期區間 / 一週分析</option><option value="all">所選資料夾全部日期</option></select></div>
-            <div class="field production-date-single"><label>日期</label><input id="productionDateInput" type="date" /></div>
-            <div class="field production-date-range hidden"><label>開始日期</label><input id="productionStartDateInput" type="date" /></div>
-            <div class="field production-date-range hidden"><label>結束日期</label><input id="productionEndDateInput" type="date" /></div>
-            <div class="field production-process-field"><label>製程 <small>（選擇器模式需要時填）</small></label><input id="productionProcessInput" placeholder="例如：雷雕、彩噴" /></div>
-          </div>
-        </details>
-
-        <div class="production-simple-folder-row production-drop-actions">
-          <button id="productionClearBtn" class="secondary production-quiet-action" type="button">清除</button>
-          <button id="productionExportCsvBtn" class="secondary production-quiet-action" type="button" disabled>匯出 CSV</button>
-        </div>
-        <details class="production-help-box production-simple-help"><summary>檔名判斷說明</summary><p>系統只讀檔名與資料夾名稱；正／背、白／彩、鏡彩／正彩、內／外等製作檔會依既有規則先合併再計數，避免重複扣料。</p></details>
-      </section>
-
-      <section class="production-simple-summary">
-        <div id="productionSummaryCards" class="production-summary-grid"><div class="production-summary-empty">尚未分析</div></div>
-        <div class="production-session-box production-simple-session">
-          <div class="production-session-head"><strong>本次生產資料</strong><span id="productionSessionLabel">尚未建立</span></div>
-          <div id="productionSessionList" class="production-session-list">加入資料夾後會顯示每批進度。</div><div id="productionBatchHistory" class="production-batch-history"></div>
-          <div class="production-session-primary-action">
-            <button id="productionAnalyzeBtn" type="button" class="production-main-action" disabled>分析新增資料</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="card production-simple-result">
-        <div class="production-section-title-row production-simple-result-head">
-          <div><h3>2. 分析結果</h3><span class="production-section-hint">點商品名稱可展開計入檔案；正常品項直接通過，只有「需處理」的項目才需要操作。</span></div>
-          <span id="productionProductCountHint">尚未分析</span>
-        </div>
-        <div class="production-product-toolbar production-simple-toolbar">
-          <input id="productionProductSearchInput" placeholder="搜尋商品" />
-          <div class="production-product-view-switch production-hidden-control"><button id="productionProductViewAllBtn" type="button" class="secondary small is-active">全部</button><button id="productionProductViewChangedBtn" type="button" class="secondary small">本次異動</button></div>
-        </div>
-        <div id="productionProductResult" class="production-table-wrap production-simple-product-table">尚未分析</div>
-
-      </section>
-
-      <details id="productionIssueSection" class="card production-simple-issues production-issue-collapse">
-        <summary class="production-issue-summary">
-          <div>
-            <h3>解析警告</h3>
-            <span class="production-section-hint">預設收合；只有會影響判斷的項目需要處理，已成功計算的舊格式只列為提示。</span>
-          </div>
-          <div class="production-issue-summary-badges">
-            <span id="productionIssueActionCount" class="production-issue-count is-action">尚未分析</span>
-            <span id="productionIssueInfoCount" class="production-issue-count is-info"></span>
-          </div>
-        </summary>
-        <div id="productionIssuePanel" class="production-issue-panel">
-          <div class="production-issue-group">
-            <div class="production-issue-group-head"><strong>⚠ 需要處理</strong><span>可能影響數量、商品判斷或合併結果</span></div>
-            <div id="productionIssueActionResult" class="production-table-wrap">尚未分析</div>
-          </div>
-          <details class="production-issue-info-group">
-            <summary><strong>ⓘ 格式提示</strong><span id="productionIssueInfoSummary">已成功解析，不需要操作</span></summary>
-            <div id="productionIssueInfoResult" class="production-table-wrap">尚未分析</div>
-          </details>
-        </div>
-      </details>
-
-      <section class="card production-simple-deduct">
-        <div class="production-simple-deduct-head">
-          <div><h3>3. 準備扣庫存</h3><p>庫存待對應與解析警告都清除後即可進入扣庫存。</p></div>
-          <span id="productionDeductReadyBadge" class="production-preview-badge is-idle">尚未分析</span>
-        </div>
-        <div id="productionDeductPreview" class="production-deduct-preview-empty">完成分析後會顯示預計扣除內容。</div>
-        <div class="production-deduct-footer"><div id="productionDeductTotals" class="production-deduct-totals"></div><button id="productionConfirmDeductBtn" type="button" disabled>確認扣庫存</button></div>
-        <div id="productionDeductTransaction" class="production-transaction-status hidden"></div>
-      </section>
-
-      <details class="card production-secondary-details">
-        <summary>其他分析資訊</summary>
-        <div class="production-result-grid production-result-grid-dashboard production-compact-stats">
-          <div><h4>平台統計</h4><div id="productionSourceResult" class="production-table-wrap">尚未分析</div></div>
-          <div><h4>標籤統計</h4><div id="productionTagResult" class="production-table-wrap">尚未分析</div></div>
-          <div><h4>製程統計</h4><div id="productionProcessResult" class="production-table-wrap">尚未分析</div></div>
-        </div>
-      </details>
-
-      <details class="card production-secondary-details production-learning-section">
-        <summary>已記住的判斷規則</summary>
-        <div class="production-learning-toolbar"><input id="productionLearningSearchInput" placeholder="搜尋規則" /><span id="productionLearningCountHint">0 筆規則</span></div>
-        <div id="productionLearningRuleList" class="production-learning-rule-list"><div class="production-side-empty">目前沒有永久學習規則。</div></div>
-      </details>
-
-      <details id="productionDetailSection" class="card production-secondary-details production-detail-section">
-        <summary>原始分析明細</summary>
-        <div id="productionDetailResult" class="production-table-wrap">尚未分析</div>
-      </details>
-    </section>
-
     <!-- 在途商品 -->
     <section id="incoming" class="tab-panel hidden">
       <div class="section-title">
@@ -235,7 +85,8 @@
             <th>叫貨數量</th>
             <th>已到貨</th>
             <th>剩餘在途</th>
-<th>叫貨人</th>
+            <th>成本</th>
+            <th>叫貨人</th>
             <th>狀態</th>
             <th>本次到貨</th>
             <th>操作</th>
@@ -271,10 +122,10 @@
             </select>
           </div>
           <div class="field filter-action-field">
-            <button id="clearHistoryBtn" class="danger" type="button">清除異動紀錄</button>
+            <button id="clearHistoryBtn" class="danger" type="button">清除測試異動紀錄</button>
           </div>
         </div>
-        <p class="note">清除異動紀錄不會影響目前庫存、品項或在途資料。此動作無法復原。</p>
+        <p class="note">清除異動紀錄不會影響目前庫存、品項或在途資料。</p>
       </div>
 
       <div class="card">
@@ -309,23 +160,8 @@
               <input id="manualOrderQty" type="number" min="1" placeholder="例如：100" />
             </div>
             <div class="field">
-              <label>商品成本</label>
+              <label>成本</label>
               <input id="manualOrderCost" type="number" min="0" placeholder="例如：1280" />
-            </div>
-            <div class="field">
-              <label>運費</label>
-              <input id="manualOrderFreight" type="number" min="0" placeholder="例如：80" />
-            </div>
-            <div class="field">
-              <label>幣別</label>
-              <select id="manualOrderCurrency">
-                <option value="TWD">台幣 TWD</option>
-                <option value="CNY">人民幣 CNY</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>匯率 / 換算</label>
-              <input id="manualOrderFxPreview" readonly placeholder="台幣免換算" />
             </div>
             <div class="field">
               <label>來源</label>
@@ -386,7 +222,8 @@
               <th>品項</th>
               <th>數量</th>
               <th>已到貨</th>
-<th>來源</th>
+              <th>成本</th>
+              <th>來源</th>
               <th>叫貨人</th>
               <th>狀態</th>
               <th>操作</th>
@@ -525,62 +362,26 @@
 
 
   <div id="quickStockModal" class="modal-mask">
-    <div class="modal-box quick-stock-modal-box">
+    <div class="modal-box">
       <h3>快速盤點</h3>
       <input type="hidden" id="quickStockItemId" />
       <p id="quickStockItemText">請確認品項</p>
-
-      <div class="quick-stock-tabs" role="tablist" aria-label="快速盤點模式">
-        <button type="button" class="quick-stock-tab active" data-quick-tab="audit">盤點修正</button>
-        <button type="button" class="quick-stock-tab" data-quick-tab="adjust">庫存調整</button>
+      <div class="field"><label>目前庫存</label><input id="quickStockOldQty" readonly /></div>
+      <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
+      <div class="field">
+        <label>異動原因</label>
+        <select id="quickStockReason">
+          <option value="盤點更新">盤點更新</option>
+          <option value="報廢調整">報廢調整</option>
+          <option value="借出調整">借出調整</option>
+          <option value="歸還調整">歸還調整</option>
+          <option value="其他調整">其他調整</option>
+        </select>
       </div>
-
-      <section class="quick-stock-pane active" id="quickStockPaneAudit">
-        <div class="field"><label>目前庫存</label><div id="quickStockOldQtyDisplay" class="readonly-value stock-readonly-display">0</div><input id="quickStockOldQty" type="hidden" readonly /></div>
-        <div class="field"><label>修改後庫存</label><input id="quickStockNewQty" type="number" min="0" /></div>
-        <div class="field"><label>安全庫存</label><input id="quickStockSafetyQty" type="number" min="0" /></div>
-        <div class="field">
-          <label>異動原因</label>
-          <select id="quickStockReason">
-            <option value="盤點更新">盤點更新</option>
-            <option value="盤點修正">盤點修正</option>
-            <option value="其他調整">其他調整</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>自訂原因（選填）</label>
-          <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
-        </div>
-      </section>
-
-      <section class="quick-stock-pane" id="quickStockPaneAdjust">
-        <div class="quick-stock-current">目前庫存：<strong id="quickAdjustCurrentQty">0</strong></div>
-        <div class="field">
-          <label>調整方式</label>
-          <select id="quickAdjustType">
-            <option value="decrease">扣減庫存</option>
-            <option value="increase">增加庫存</option>
-          </select>
-        </div>
-        <div class="field"><label>調整數量</label><input id="quickAdjustQty" type="number" min="1" placeholder="例如：10" /></div>
-        <div class="field">
-          <label>原因</label>
-          <select id="quickAdjustReason">
-            <option value="料物瑕疵">料物瑕疵</option>
-            <option value="報廢調整">報廢調整</option>
-            <option value="測試耗材">測試耗材</option>
-            <option value="遺失">遺失</option>
-            <option value="其他調整">其他調整</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>備註（選填）</label>
-          <input id="quickAdjustNote" placeholder="例如：製程發現料物瑕疵" />
-        </div>
-        <div class="quick-adjust-preview" id="quickAdjustPreview">調整後庫存：-</div>
-        <div class="modal-inline-error" id="quickStockInlineError" hidden></div>
-      </section>
-
+      <div class="field">
+        <label>自訂原因（選填）</label>
+        <input id="quickStockCustomReason" placeholder="例如：月底盤點修正" />
+      </div>
       <div class="modal-actions">
         <button class="secondary" id="cancelQuickStockBtn" type="button">取消</button>
         <button id="confirmQuickStockBtn" type="button">確認更新</button>
@@ -627,99 +428,16 @@
       <div class="field">
         <label>分類</label>
         <select id="editItemCategoryInput">
-          <option>金屬</option>
-          <option>木頭</option>
-          <option>彩印</option>
-          <option>包材</option>
-<option>熱轉印 / 熱昇華</option>
+          <option value="">請選擇分類</option>
         </select>
       </div>
       <div class="field"><label>管理部門</label><input id="editItemDeptInput" placeholder="例如：金屬 / 彩印" /></div>
       <div class="field"><label>安全庫存</label><input id="editItemSafetyInput" type="number" min="0" /></div>
       <div class="field check-field"><input id="editItemSharedInput" type="checkbox" /><label for="editItemSharedInput">共用庫存</label></div>
-
-      <div class="stock-adjust-panel">
-        <div class="stock-adjust-title">
-          <strong>庫存調整</strong>
-          <span id="editItemCurrentStockText">目前庫存：-</span>
-        </div>
-        <p class="note compact-note">此區可直接輸入數量，系統會自動加減庫存並留下異動紀錄；不需要自己先計算新庫存。</p>
-        <div class="form-grid compact-adjust-grid">
-          <div class="field">
-            <label>調整類型</label>
-            <select id="editItemAdjustType">
-              <option value="none">不調整庫存</option>
-              <option value="deduct">扣減庫存</option>
-              <option value="add">增加庫存</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>調整數量</label>
-            <input id="editItemAdjustQty" type="number" min="1" step="1" placeholder="例如：10" />
-          </div>
-          <div class="field">
-            <label>原因</label>
-            <select id="editItemAdjustReason">
-              <option value="料物瑕疵">料物瑕疵</option>
-              <option value="製程損耗">製程損耗</option>
-              <option value="測試耗材">測試耗材</option>
-              <option value="盤點修正">盤點修正</option>
-              <option value="其他">其他</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
       <div class="field"><label>備註</label><input id="editItemNoteInput" /></div>
       <div class="modal-actions">
         <button class="secondary" id="closeEditItemBtn">取消</button>
         <button id="saveEditItemBtn">儲存</button>
-      </div>
-    </div>
-  </div>
-
-
-  <div id="productionProductPickerModal" class="modal-mask">
-    <div class="modal-box production-picker-modal-box production-picker-simple">
-      <div class="production-picker-header">
-        <div>
-          <h3>處理商品</h3>
-          <p class="production-picker-subtitle" id="productionProductPickerTitle">確認這個製作檔要扣哪些庫存，以及各扣多少。</p>
-        </div>
-        <div class="production-picker-detected-qty">辨識數量 <strong id="productionProductPickerDetectedQty">1</strong></div>
-      </div>
-
-      <div id="productionProductPickerExistingRule" class="production-picker-existing-rule hidden"></div>
-      <div id="productionProductPickerMessage" class="production-picker-message" aria-live="polite"></div>
-
-      <div id="productionProductPickerList" class="production-picker-list"></div>
-
-      <div class="production-picker-add-row">
-        <div class="field production-picker-search-field">
-          <label>新增庫存品項</label>
-          <input id="productionProductPickerSearch" type="text" placeholder="搜尋庫存，例如：黃銅片、木頭底座" autocomplete="off" />
-          <div id="productionProductPickerResults" class="production-picker-results">
-            <div class="production-picker-empty">輸入關鍵字後，點選品項即可加入。</div>
-          </div>
-        </div>
-        <div class="field production-picker-qty-field">
-          <label>扣除數量</label>
-          <input id="productionProductPickerQty" type="number" min="1" step="1" inputmode="numeric" value="1" />
-        </div>
-      </div>
-
-      <div class="production-picker-footer-options">
-        <label class="check-field production-picker-check">
-          <input type="checkbox" id="productionProductPickerPermanent" checked />
-          <span>記住這個商品的扣庫存方式</span>
-        </label>
-        <button type="button" class="production-picker-stats-link" id="productionPickerStatsOnlyBtn">這個商品不扣庫存</button>
-      </div>
-
-
-      <div class="modal-actions production-picker-actions">
-        <button class="secondary" id="productionProductPickerCancelBtn" type="button">取消</button>
-        <button id="productionProductPickerSaveBtn" type="button">確認</button>
       </div>
     </div>
   </div>
@@ -742,6 +460,5 @@
   <script src="js/firebase-auth.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/app.js"></script>
-  <script src="js/production.js"></script>
 </body>
 </html>
