@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  // V3.57 production analyzer; removable batches + persistent unfinished workspace + safe page switching.
+  // V3.58 production analyzer; removable batches + persistent unfinished workspace + safe page switching.
 
   const DEFAULT_SOURCE_MAP = {
     P: "Pinkoi",
@@ -76,6 +76,8 @@
   let droppedBatchDuplicateCounts = new Map();
   let droppedBatchLastAddedAt = new Map();
   let lastProductionTransactionId = "";
+  // V3.58：過渡期防重複扣存。已扣過來源預設排除，使用者可明確重新納入本次扣存。
+  let duplicateSourceReincludeKeys = new Set();
 
   function createEmptySession() {
     return {
@@ -2043,20 +2045,35 @@
     const totals = new Map();
     const sourceKeys = new Set();
     const duplicateSourceKeys = new Set();
+    const duplicateSources = new Map();
     const alreadyDeducted = activeProductionSourceKeys();
     const unmapped = [];
 
     (analysis?.records || []).forEach(record => {
       if (Number(record.countedQuantity || 0) <= 0 || isStatsOnlyRecord(record)) return;
-      // V3.44：同一工作階段可連續分析多個資料夾。
-      // 已完成扣庫存的舊紀錄不再加入下一次扣除計畫；若是重新加入同一來源檔，
-      // 但沒有本工作階段的交易標記，仍會由 activeProductionSourceKeys 擋重複扣除。
       if (recordHasActiveDeduction(record)) return;
       const sourceKey = String(record.sourceSignature || record.path || record.filename || "");
-      if (sourceKey) {
-        sourceKeys.add(sourceKey);
-        if (alreadyDeducted.has(sourceKey)) duplicateSourceKeys.add(sourceKey);
+      const isDuplicate = !!sourceKey && alreadyDeducted.has(sourceKey);
+      const forceReinclude = !!sourceKey && duplicateSourceReincludeKeys.has(sourceKey);
+
+      // V3.58：曾經正式扣過、目前交易仍有效的來源檔，預設直接排除，不再阻擋其他新檔扣庫存。
+      if (isDuplicate && !forceReinclude) {
+        duplicateSourceKeys.add(sourceKey);
+        if (!duplicateSources.has(sourceKey)) {
+          const tx = getProductionTransactions().find(t => t?.status === "active" && (t.sourceKeys || []).map(String).includes(sourceKey));
+          duplicateSources.set(sourceKey, {
+            key: sourceKey,
+            filename: record.filename || sourceKey.split(/[\\/]/).pop() || sourceKey,
+            path: record.path || "",
+            process: record.process || "未指定",
+            deductedAt: tx?.createdAtText || "",
+            transactionId: tx?.id || ""
+          });
+        }
+        return;
       }
+
+      if (sourceKey) sourceKeys.add(sourceKey);
       const details = (record.stockDetails || []).filter(d => Number(d.quantity || 0) > 0);
       details.forEach(detail => {
         const item = officialInventoryItem(detail.item);
@@ -2084,6 +2101,7 @@
       rows,
       sourceKeys: Array.from(sourceKeys),
       duplicateSourceKeys: Array.from(duplicateSourceKeys),
+      duplicateSources: Array.from(duplicateSources.values()),
       unmapped: Array.from(new Set(unmapped.filter(Boolean))),
       insufficient: rows.filter(row => row.insufficient)
     };
@@ -2353,13 +2371,46 @@
         </div>`).join('');
     }
 
+    if (plan.duplicateSources?.length) {
+      box.insertAdjacentHTML("beforeend", `
+        <details class="production-duplicate-deduct-card">
+          <summary><span><strong>⚠ ${plan.duplicateSources.length} 個來源檔曾扣過</strong><small>已自動排除，不影響其他資料扣庫存</small></span><b>查看檔案</b></summary>
+          <div class="production-duplicate-deduct-list">
+            ${plan.duplicateSources.map(src => `
+              <div class="production-duplicate-deduct-row">
+                <div><strong>${escapeHtml(src.filename)}</strong><span>${escapeHtml(src.process || "未指定製程")}${src.deductedAt ? `｜上次扣存 ${escapeHtml(src.deductedAt)}` : ""}</span></div>
+                <span class="production-duplicate-excluded">已排除</span>
+                <button type="button" class="secondary small production-reinclude-source-btn" data-source-key="${escapeHtml(src.key)}">仍要重新計入</button>
+              </div>`).join("")}
+          </div>
+        </details>`);
+      box.querySelectorAll(".production-reinclude-source-btn").forEach(btn => btn.addEventListener("click", () => {
+        const key = String(btn.dataset.sourceKey || "");
+        if (!key) return;
+        if (!confirm("這個來源檔先前已正式扣過庫存。確定仍要重新計入本次扣存嗎？")) return;
+        duplicateSourceReincludeKeys.add(key);
+        renderDeductPreview(lastAnalysis);
+        updateProductionStatus("已將指定來源檔重新納入本次扣存；請再次確認扣存預覽。", "done");
+      }));
+    }
+
+    // 已被手動重新納入的來源，提供明確取消入口。
+    const reincluded = Array.from(duplicateSourceReincludeKeys).filter(key => activeProductionSourceKeys().has(key) && plan.sourceKeys.includes(key));
+    if (reincluded.length) {
+      box.insertAdjacentHTML("beforeend", `<div class="production-reincluded-note"><span>⚠ ${reincluded.length} 個已扣過來源檔目前被手動重新計入</span><button type="button" class="secondary small production-cancel-reinclude-btn">恢復自動排除</button></div>`);
+      box.querySelector(".production-cancel-reinclude-btn")?.addEventListener("click", () => {
+        reincluded.forEach(key => duplicateSourceReincludeKeys.delete(key));
+        renderDeductPreview(lastAnalysis);
+      });
+    }
+
     const totalQty = plan.rows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
     totals.textContent = `將扣 ${plan.rows.length} 個庫存品項，共 ${totalQty} 件`;
     const blockers = [];
     if (unmappedProducts) blockers.push(`${unmappedProducts} 個商品待對應`);
     if (issueCount) blockers.push(`${issueCount} 筆解析警告`);
     if (plan.unmapped.length) blockers.push(`${plan.unmapped.length} 個庫存品項無法找到`);
-    if (plan.duplicateSourceKeys.length) blockers.push(`${plan.duplicateSourceKeys.length} 個來源檔已扣過`);
+    // V3.58：已扣過來源檔預設自動排除，只提醒，不再阻擋其他正常來源扣存。
 
     const ready = blockers.length === 0 && plan.rows.length > 0;
     const negativeWarning = plan.insufficient.length ? `${plan.insufficient.length} 個品項將扣成負庫存` : '';
@@ -2377,7 +2428,7 @@
     const plan = buildDeductionPlan(lastAnalysis);
     const issueCount = actionableIssues(lastAnalysis).length;
     const unmappedProducts = (lastAnalysis.summary?.productRows || []).filter(row => !["mapped","stats"].includes(productInventoryMappingStatus(row.name).status)).length;
-    if (issueCount || unmappedProducts || plan.unmapped.length || plan.duplicateSourceKeys.length || !plan.rows.length) {
+    if (issueCount || unmappedProducts || plan.unmapped.length || !plan.rows.length) {
       renderDeductPreview(lastAnalysis);
       updateProductionStatus("目前仍有項目無法安全扣庫存，請先確認扣庫存區的提示。", "error");
       return;
